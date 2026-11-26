@@ -1,0 +1,2064 @@
+{
+  "key": "settings-flow:qa",
+  "title": "开发者",
+  "nodes": [
+    {
+      "id": "form:704",
+      "kind": "action",
+      "title": "使用说明",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "button",
+      "immediate": false,
+      "confirmLabel": "确定",
+      "icon": "circle-question-mark"
+    },
+    {
+      "id": "form:705:text:1",
+      "kind": "note",
+      "title": "运行日志"
+    },
+    {
+      "id": "form:706:text:2",
+      "kind": "note",
+      "title": "Alt+Shift+D"
+    },
+    {
+      "id": "form:707:text:3",
+      "kind": "note",
+      "title": "后台运行时的日志。"
+    },
+    {
+      "id": "form:708",
+      "kind": "switch",
+      "title": "运行日志",
+      "value": "1",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "button",
+      "immediate": false,
+      "confirmLabel": "确定",
+      "detail": "✓"
+    },
+    {
+      "id": "form:709:text:5",
+      "kind": "note",
+      "title": "Console ("
+    },
+    {
+      "id": "form:709:text:6",
+      "kind": "note",
+      "title": "19"
+    },
+    {
+      "id": "form:709:text:7",
+      "kind": "note",
+      "title": ")"
+    },
+    {
+      "id": "form:710",
+      "kind": "action",
+      "title": "Copy 19",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "button",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:711",
+      "kind": "action",
+      "title": "Clear",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "button",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:712",
+      "kind": "input",
+      "title": "Console (19)",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "Search this session's log",
+      "multiline": false,
+      "inputType": "search",
+      "immediate": true,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:713",
+      "kind": "action",
+      "title": "Levelall▾",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "button",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:714",
+      "kind": "action",
+      "title": "Moduleall▾",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "button",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:715",
+      "kind": "action",
+      "title": "08:44:04[vite] hot updated: /src/index.css",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:716",
+      "kind": "action",
+      "title": "08:44:03[vite] hot updated: /src/index.css",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:717",
+      "kind": "action",
+      "title": "08:44:02[vite] hot updated: /src/index.css",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:718",
+      "kind": "action",
+      "title": "08:44:01[vite] hot updated: /src/index.css",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:719",
+      "kind": "action",
+      "title": "08:44:00[vite] hot updated: /src/index.css",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:720",
+      "kind": "action",
+      "title": "08:43:58[settings/rear-lyrics] status unavailable Error: \"FoliaNative\" plugin is not implemented on web at createPluginMethod (http://127.0.0.1:4371/node_modules/.vite/deps/@capacitor_core.js?v=9acaac04:78:15) at http://127.0.0.1:4371/node_modules/.vite/deps/@capacitor_core.js?v=9acaac04:84:17 at async http://127.0.0.1:4371/src/components/modal/settings/useRearLyricsSettings.ts:34:20 at async http://127.0.0.1:4371/src/components/modal/settings/useRearLyricsSettings.ts:43:4",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:721",
+      "kind": "action",
+      "title": "08:43:56Not logged in, session expired, or offline",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:722",
+      "kind": "action",
+      "title": "08:43:56Not logged in, session expired, or offline",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:723",
+      "kind": "action",
+      "title": "08:43:55[QQLibrary] refresh:unavailable {\"reason\":\"not-configured\"}",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:724",
+      "kind": "action",
+      "title": "08:43:55[QQLibrary] refresh:start {\"configured\":false}",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:725",
+      "kind": "action",
+      "title": "08:43:55[KugouLibrary] refresh:unavailable {\"reason\":\"not-configured\"}",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:726",
+      "kind": "action",
+      "title": "08:43:55[KugouLibrary] refresh:start {\"configured\":false}",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:727",
+      "kind": "action",
+      "title": "08:43:55[Automix] models on disk at startup: beat_this no, htdemucs no",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:728",
+      "kind": "action",
+      "title": "08:43:55[Automix] models on disk at startup: beat_this no, htdemucs no",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:729",
+      "kind": "action",
+      "title": "08:43:55[Lyrics] read-head reset for the DISPLAYED song none (per-song 0ms + device 0ms)",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:730",
+      "kind": "action",
+      "title": "08:43:55[Lyrics] read-head reset for the DISPLAYED song none (per-song 0ms + device 0ms)",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:731",
+      "kind": "action",
+      "title": "08:43:55Capacitor plugin \"TingyuChrome\" already registered. Cannot register plugins twice.",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:732",
+      "kind": "action",
+      "title": "08:43:55%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:733",
+      "kind": "action",
+      "title": "08:43:53Service Worker registration blocked by Playwright",
+      "value": "",
+      "disabled": false,
+      "min": 0,
+      "max": 100,
+      "step": 0,
+      "unit": "",
+      "placeholder": "",
+      "multiline": false,
+      "inputType": "text",
+      "immediate": false,
+      "confirmLabel": "确定"
+    },
+    {
+      "id": "form:734:text:32",
+      "kind": "note",
+      "title": "日志按开头的 [模块] 前缀分组，可以单独筛选。详见 docs/client-logging.md。"
+    },
+    {
+      "id": "form:734:text:33",
+      "kind": "note",
+      "title": "(19)"
+    }
+  ],
+  "layout": {
+    "id": "page:form:797",
+    "kind": "column",
+    "style": {
+      "padding": [
+        22,
+        0,
+        22,
+        0
+      ]
+    },
+    "children": [
+      {
+        "id": "form:736",
+        "kind": "column",
+        "style": {
+          "gap": 32
+        },
+        "children": [
+          {
+            "id": "form:737",
+            "kind": "column",
+            "style": {
+              "gap": 16
+            },
+            "children": [
+              {
+                "id": "form:738",
+                "kind": "card",
+                "style": {
+                  "radius": 16,
+                  "border": true,
+                  "gap": 16,
+                  "padding": [
+                    16,
+                    16,
+                    16,
+                    16
+                  ]
+                },
+                "children": [
+                  {
+                    "id": "form:739",
+                    "kind": "row",
+                    "style": {
+                      "align": "between",
+                      "gap": 16
+                    },
+                    "children": [
+                      {
+                        "id": "form:740",
+                        "kind": "row",
+                        "style": {
+                          "gap": 12,
+                          "grow": true
+                        },
+                        "children": [
+                          {
+                            "id": "form:741",
+                            "kind": "column",
+                            "style": {
+                              "radius": 8,
+                              "tone": "muted",
+                              "padding": [
+                                8,
+                                8,
+                                8,
+                                8
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "form:742",
+                                "kind": "icon",
+                                "icon": "scroll-text",
+                                "style": {
+                                  "width": 14,
+                                  "height": 14
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "id": "form:743",
+                            "kind": "column",
+                            "style": {
+                              "gap": 4
+                            },
+                            "children": [
+                              {
+                                "id": "form:744",
+                                "kind": "row",
+                                "style": {
+                                  "align": "center",
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:705",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "font": 14,
+                                      "weight": 500,
+                                      "tone": "text"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:1",
+                                        "kind": "text",
+                                        "text": "运行日志"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:706",
+                                    "kind": "card",
+                                    "style": {
+                                      "radius": 4,
+                                      "border": true,
+                                      "font": 10,
+                                      "weight": 400,
+                                      "padding": [
+                                        6,
+                                        2,
+                                        6,
+                                        2
+                                      ],
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:2",
+                                        "kind": "text",
+                                        "text": "Alt+Shift+D"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "form:707",
+                                "kind": "column",
+                                "style": {
+                                  "font": 12,
+                                  "tone": "muted"
+                                },
+                                "children": [
+                                  {
+                                    "id": "copy:3",
+                                    "kind": "text",
+                                    "text": "后台运行时的日志。"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "layout:form:708",
+                        "kind": "control",
+                        "ref": "form:708",
+                        "style": {
+                          "width": 48,
+                          "height": 24,
+                          "radius": 64,
+                          "padding": [
+                            4,
+                            4,
+                            4,
+                            4
+                          ]
+                        },
+                        "text": "#71717a"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "form:745",
+                    "kind": "column",
+                    "style": {},
+                    "children": [
+                      {
+                        "id": "form:746",
+                        "kind": "row",
+                        "style": {
+                          "align": "between",
+                          "gap": 8,
+                          "padding": [
+                            12,
+                            12,
+                            12,
+                            0
+                          ]
+                        },
+                        "children": [
+                          {
+                            "id": "form:709",
+                            "kind": "column",
+                            "style": {
+                              "font": 10,
+                              "tone": "muted",
+                              "grow": true
+                            },
+                            "children": [
+                              {
+                                "id": "copy:4",
+                                "kind": "text",
+                                "text": "Console (19)"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "form:747",
+                            "kind": "row",
+                            "style": {
+                              "gap": 8
+                            },
+                            "children": [
+                              {
+                                "id": "layout:form:710",
+                                "kind": "control",
+                                "ref": "form:710",
+                                "style": {
+                                  "radius": 64,
+                                  "border": true,
+                                  "font": 10,
+                                  "padding": [
+                                    12,
+                                    6,
+                                    12,
+                                    6
+                                  ]
+                                },
+                                "children": [
+                                  {
+                                    "id": "content:form:710",
+                                    "kind": "row",
+                                    "style": {},
+                                    "children": [
+                                      {
+                                        "id": "copy:5",
+                                        "kind": "text",
+                                        "text": "Copy 19"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "layout:form:711",
+                                "kind": "control",
+                                "ref": "form:711",
+                                "style": {
+                                  "radius": 64,
+                                  "border": true,
+                                  "font": 10,
+                                  "padding": [
+                                    12,
+                                    6,
+                                    12,
+                                    6
+                                  ]
+                                },
+                                "children": [
+                                  {
+                                    "id": "content:form:711",
+                                    "kind": "row",
+                                    "style": {},
+                                    "children": [
+                                      {
+                                        "id": "copy:6",
+                                        "kind": "text",
+                                        "text": "Clear"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "form:748",
+                        "kind": "column",
+                        "style": {
+                          "gap": 8,
+                          "padding": [
+                            12,
+                            8,
+                            12,
+                            0
+                          ]
+                        },
+                        "children": [
+                          {
+                            "id": "layout:form:712",
+                            "kind": "control",
+                            "ref": "form:712",
+                            "style": {
+                              "radius": 6,
+                              "border": true,
+                              "font": 11,
+                              "padding": [
+                                8,
+                                4,
+                                8,
+                                4
+                              ]
+                            }
+                          },
+                          {
+                            "id": "form:749",
+                            "kind": "wrap",
+                            "style": {
+                              "gap": 8
+                            },
+                            "children": [
+                              {
+                                "id": "form:750",
+                                "kind": "column",
+                                "style": {
+                                  "grow": true
+                                },
+                                "children": [
+                                  {
+                                    "id": "layout:form:713",
+                                    "kind": "control",
+                                    "ref": "form:713",
+                                    "style": {
+                                      "align": "between",
+                                      "gap": 8,
+                                      "radius": 6,
+                                      "border": true,
+                                      "font": 10,
+                                      "padding": [
+                                        8,
+                                        4,
+                                        8,
+                                        4
+                                      ]
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "content:form:713",
+                                        "kind": "row",
+                                        "style": {
+                                          "gap": 8,
+                                          "align": "between"
+                                        },
+                                        "children": [
+                                          {
+                                            "id": "form:751",
+                                            "kind": "wrap",
+                                            "style": {
+                                              "grow": true
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "copy:7",
+                                                "kind": "text",
+                                                "text": "Level"
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "id": "form:752",
+                                            "kind": "row",
+                                            "style": {
+                                              "align": "center",
+                                              "gap": 4,
+                                              "tone": "muted"
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "copy:8",
+                                                "kind": "text",
+                                                "text": "all"
+                                              },
+                                              {
+                                                "id": "form:753",
+                                                "kind": "wrap",
+                                                "style": {},
+                                                "children": [
+                                                  {
+                                                    "id": "copy:9",
+                                                    "kind": "text",
+                                                    "text": "▾"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "form:754",
+                                "kind": "column",
+                                "style": {
+                                  "grow": true
+                                },
+                                "children": [
+                                  {
+                                    "id": "layout:form:714",
+                                    "kind": "control",
+                                    "ref": "form:714",
+                                    "style": {
+                                      "align": "between",
+                                      "gap": 8,
+                                      "radius": 6,
+                                      "border": true,
+                                      "font": 10,
+                                      "padding": [
+                                        8,
+                                        4,
+                                        8,
+                                        4
+                                      ]
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "content:form:714",
+                                        "kind": "row",
+                                        "style": {
+                                          "gap": 8,
+                                          "align": "between"
+                                        },
+                                        "children": [
+                                          {
+                                            "id": "form:755",
+                                            "kind": "wrap",
+                                            "style": {
+                                              "grow": true
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "copy:10",
+                                                "kind": "text",
+                                                "text": "Module"
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "id": "form:756",
+                                            "kind": "row",
+                                            "style": {
+                                              "align": "center",
+                                              "gap": 4,
+                                              "tone": "muted"
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "copy:11",
+                                                "kind": "text",
+                                                "text": "all"
+                                              },
+                                              {
+                                                "id": "form:757",
+                                                "kind": "wrap",
+                                                "style": {},
+                                                "children": [
+                                                  {
+                                                    "id": "copy:12",
+                                                    "kind": "text",
+                                                    "text": "▾"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "form:758",
+                        "kind": "column",
+                        "style": {
+                          "padding": [
+                            4,
+                            0,
+                            4,
+                            8
+                          ],
+                          "margin": [
+                            0,
+                            8,
+                            0,
+                            0
+                          ],
+                          "maxHeight": 416,
+                          "scroll": true,
+                          "reverse": true
+                        },
+                        "children": [
+                          {
+                            "id": "layout:form:715",
+                            "kind": "control",
+                            "ref": "form:715",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:715",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:759",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:13",
+                                        "kind": "text",
+                                        "text": "08:44:04"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:760",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:14",
+                                        "kind": "text",
+                                        "text": "[vite] hot updated: /src/index.css"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:716",
+                            "kind": "control",
+                            "ref": "form:716",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:716",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:761",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:15",
+                                        "kind": "text",
+                                        "text": "08:44:03"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:762",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:16",
+                                        "kind": "text",
+                                        "text": "[vite] hot updated: /src/index.css"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:717",
+                            "kind": "control",
+                            "ref": "form:717",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:717",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:763",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:17",
+                                        "kind": "text",
+                                        "text": "08:44:02"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:764",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:18",
+                                        "kind": "text",
+                                        "text": "[vite] hot updated: /src/index.css"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:718",
+                            "kind": "control",
+                            "ref": "form:718",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:718",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:765",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:19",
+                                        "kind": "text",
+                                        "text": "08:44:01"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:766",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:20",
+                                        "kind": "text",
+                                        "text": "[vite] hot updated: /src/index.css"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:719",
+                            "kind": "control",
+                            "ref": "form:719",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:719",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:767",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:21",
+                                        "kind": "text",
+                                        "text": "08:44:00"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:768",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:22",
+                                        "kind": "text",
+                                        "text": "[vite] hot updated: /src/index.css"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:720",
+                            "kind": "control",
+                            "ref": "form:720",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:720",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:769",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:23",
+                                        "kind": "text",
+                                        "text": "08:43:58"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:770",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:24",
+                                        "kind": "text",
+                                        "text": "[settings/rear-lyrics] status unavailable Error: \"FoliaNative\" plugin is not implemented on web at createPluginMethod (http://127.0.0.1:4371/node_modules/.vite/deps/@capacitor_core.js?v=9acaac04:78:15) at http://127.0.0.1:4371/node_modules/.vite/deps/@capacitor_core.js?v=9acaac04:84:17 at async http://127.0.0.1:4371/src/components/modal/settings/useRearLyricsSettings.ts:34:20 at async http://127.0.0.1:4371/src/components/modal/settings/useRearLyricsSettings.ts:43:4"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:721",
+                            "kind": "control",
+                            "ref": "form:721",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:721",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:771",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:25",
+                                        "kind": "text",
+                                        "text": "08:43:56"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:772",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:26",
+                                        "kind": "text",
+                                        "text": "Not logged in, session expired, or offline"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:722",
+                            "kind": "control",
+                            "ref": "form:722",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:722",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:773",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:27",
+                                        "kind": "text",
+                                        "text": "08:43:56"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:774",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:28",
+                                        "kind": "text",
+                                        "text": "Not logged in, session expired, or offline"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:723",
+                            "kind": "control",
+                            "ref": "form:723",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:723",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:775",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:29",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:776",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:30",
+                                        "kind": "text",
+                                        "text": "[QQLibrary] refresh:unavailable {\"reason\":\"not-configured\"}"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:724",
+                            "kind": "control",
+                            "ref": "form:724",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:724",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:777",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:31",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:778",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:32",
+                                        "kind": "text",
+                                        "text": "[QQLibrary] refresh:start {\"configured\":false}"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:725",
+                            "kind": "control",
+                            "ref": "form:725",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:725",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:779",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:33",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:780",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:34",
+                                        "kind": "text",
+                                        "text": "[KugouLibrary] refresh:unavailable {\"reason\":\"not-configured\"}"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:726",
+                            "kind": "control",
+                            "ref": "form:726",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:726",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:781",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:35",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:782",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:36",
+                                        "kind": "text",
+                                        "text": "[KugouLibrary] refresh:start {\"configured\":false}"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:727",
+                            "kind": "control",
+                            "ref": "form:727",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:727",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:783",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:37",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:784",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:38",
+                                        "kind": "text",
+                                        "text": "[Automix] models on disk at startup: beat_this no, htdemucs no"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:728",
+                            "kind": "control",
+                            "ref": "form:728",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:728",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:785",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:39",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:786",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:40",
+                                        "kind": "text",
+                                        "text": "[Automix] models on disk at startup: beat_this no, htdemucs no"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:729",
+                            "kind": "control",
+                            "ref": "form:729",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:729",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:787",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:41",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:788",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:42",
+                                        "kind": "text",
+                                        "text": "[Lyrics] read-head reset for the DISPLAYED song none (per-song 0ms + device 0ms)"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:730",
+                            "kind": "control",
+                            "ref": "form:730",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:730",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:789",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:43",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:790",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:44",
+                                        "kind": "text",
+                                        "text": "[Lyrics] read-head reset for the DISPLAYED song none (per-song 0ms + device 0ms)"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:731",
+                            "kind": "control",
+                            "ref": "form:731",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:731",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:791",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:45",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:792",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:46",
+                                        "kind": "text",
+                                        "text": "Capacitor plugin \"TingyuChrome\" already registered. Cannot register plugins twice."
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:732",
+                            "kind": "control",
+                            "ref": "form:732",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:732",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:793",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:47",
+                                        "kind": "text",
+                                        "text": "08:43:55"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:794",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:48",
+                                        "kind": "text",
+                                        "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "layout:form:733",
+                            "kind": "control",
+                            "ref": "form:733",
+                            "style": {
+                              "gap": 8,
+                              "radius": 4,
+                              "font": 10,
+                              "minHeight": 22,
+                              "padding": [
+                                8,
+                                3,
+                                8,
+                                3
+                              ]
+                            },
+                            "children": [
+                              {
+                                "id": "content:form:733",
+                                "kind": "row",
+                                "style": {
+                                  "gap": 8
+                                },
+                                "children": [
+                                  {
+                                    "id": "form:795",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "tone": "muted"
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:49",
+                                        "kind": "text",
+                                        "text": "08:43:53"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "form:796",
+                                    "kind": "wrap",
+                                    "style": {
+                                      "grow": true
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "copy:50",
+                                        "kind": "text",
+                                        "text": "Service Worker registration blocked by Playwright"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "form:734",
+                "kind": "column",
+                "style": {
+                  "font": 11,
+                  "tone": "muted"
+                },
+                "children": [
+                  {
+                    "id": "copy:51",
+                    "kind": "text",
+                    "text": "日志按开头的 [模块] 前缀分组，可以单独筛选。详见 docs/client-logging.md。 (19)"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "headerActions": [
+    "form:704"
+  ]
+}

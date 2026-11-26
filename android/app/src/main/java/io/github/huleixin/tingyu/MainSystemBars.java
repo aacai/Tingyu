@@ -1,0 +1,156 @@
+package io.github.huleixin.tingyu;
+
+import android.app.Activity;
+import android.graphics.Color;
+import android.os.Build;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsAnimationCompat;
+import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import androidx.core.view.WindowInsetsControllerCompat;
+import com.getcapacitor.JSObject;
+
+// android/app/src/main/java/top/izuna/foliamajor/MainSystemBars.java
+/** Main-phone policy only. RearLyricsActivity keeps its independent immersive display window. */
+final class MainSystemBars {
+    private MainSystemBars() {}
+    private static Insets latestSafe = Insets.NONE;
+    private static float density = 1f;
+    private static volatile boolean systemBarsVisible = true;
+    private static boolean stageVisible;
+
+    static void setStageVisible(Activity activity, boolean visible) {
+        if (stageVisible == visible) return;
+        stageVisible = visible;
+        if (!visible) systemBarsVisible = true;
+        applyVisibility(activity);
+    }
+
+    static JSObject getInsets() {
+        JSObject result = new JSObject();
+        result.put("top", latestSafe.top / density);
+        result.put("bottom", latestSafe.bottom / density);
+        result.put("left", latestSafe.left / density);
+        result.put("right", latestSafe.right / density);
+        return result;
+    }
+
+    static void setVisible(Activity activity, boolean visible) {
+        if (!(activity instanceof MainActivity)) return;
+        systemBarsVisible = visible || !stageVisible;
+        applyVisibility(activity);
+    }
+
+    private static void applyVisibility(Activity activity) {
+        Window window = activity.getWindow();
+        if (window == null) return;
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
+        if (systemBarsVisible) {
+            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_DEFAULT);
+            controller.show(WindowInsetsCompat.Type.systemBars());
+        } else {
+            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(WindowInsetsCompat.Type.systemBars());
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    static boolean apply(Activity activity) {
+        if (!(activity instanceof MainActivity)) return false;
+        Window window = activity.getWindow();
+        View decor = window.getDecorView();
+        // Android 15+ enforces edge-to-edge for targetSdk 35+, but older versions still need
+        // the window to opt in. This also clears the legacy translucent-bar flags and keeps
+        // the status / navigation bars transparent on every supported API.
+        WindowCompat.enableEdgeToEdge(window);
+        WindowCompat.setDecorFitsSystemWindows(window, false);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
+            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            | WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
+            | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.setStatusBarColor(Color.TRANSPARENT);
+        window.setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.setNavigationBarContrastEnforced(false);
+            window.setStatusBarContrastEnforced(false);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams attributes = window.getAttributes();
+            attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            window.setAttributes(attributes);
+        }
+        decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        // Keep edge-to-edge system areas backed by the same full-bleed WebView surface.
+        // A fixed native tint creates visible bands over page gradients and stage backdrops.
+        // 但「首帧之前」decor 透明 = 合成器清成黑色（录屏 68736 的纯黑卡片）：这段时间交给
+        // BootSurfaceTint 用页面底色顶着，Compose 首帧一出来就交还透明。
+        io.github.huleixin.tingyu.chrome.BootSurfaceTint.applyDecor(activity, decor);
+        // Capacitor's SystemBars automatic decor padding is disabled in capacitor.config.json.
+        // Clear a previous layout pass before the single content listener reserves keyboard space.
+        decor.setPadding(0, 0, 0, 0);
+        io.github.huleixin.tingyu.chrome.InterfaceAppearance.applyBars(activity);
+        applyVisibility(activity);
+        View content = activity.findViewById(android.R.id.content);
+        if (content != null) {
+            // Background is full bleed; JS reserves a safe inner content rectangle exactly once.
+            ViewCompat.setOnApplyWindowInsetsListener(content, (view, insets) -> {
+                int safeTypes = WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout();
+                // A transient system-bar reveal must not resize the lyric renderer.
+                Insets safe = insets.getInsetsIgnoringVisibility(safeTypes);
+                float nextDensity = view.getResources().getDisplayMetrics().density;
+                if (!safe.equals(latestSafe) || density != nextDensity) {
+                    latestSafe = safe;
+                    density = nextDensity;
+                    FoliaNativePlugin.emitMainWindowInsets(getInsets());
+                }
+                // Compose is below this listener and receives consumed (zero) insets.
+                // Feed its startup geometry the same authoritative values as the WebView.
+                io.github.huleixin.tingyu.chrome.ComposeChromeHost shell = ((MainActivity) activity).getNativeShell();
+                if (shell != null) shell.setSafeInsets(safe.top / nextDensity, safe.bottom / nextDensity);
+                int keyboard = insets.isVisible(WindowInsetsCompat.Type.ime()) ? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0;
+                // Publish before resizing children: no frame with a smaller root and stale footer ownership.
+                if (shell != null) shell.setImeInset(keyboard / nextDensity);
+                if (view.getPaddingBottom() != keyboard) view.setPadding(0, 0, 0, keyboard);
+                // 2026-11-09：这里把 content 压矮了 keyboard px，而 Compose 侧的 ime inset 又被
+                // 下一行 consume 成 0 —— 底栏拿不到键盘高度，就会跟着压矮后的根贴到键盘上方
+                // （真机截图：迷你条/导航栏被顶起来）。把真实键盘高度原样喂给宿主，让它按
+                // 「虚拟整屏高」定位：原位不动、被键盘盖住。
+                return new WindowInsetsCompat.Builder(insets).setInsets(safeTypes | WindowInsetsCompat.Type.ime(), Insets.NONE).build();
+            });
+            // Hide the retained footer layers before the first IME animation layout. Offsetting
+            // alone can expose a white glass rectangle above a keyboard that is still moving.
+            Set<WindowInsetsAnimationCompat> imeAnimations = new HashSet<>();
+            ViewCompat.setWindowInsetsAnimationCallback(content,
+                new WindowInsetsAnimationCompat.Callback(WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                    @Override public void onPrepare(WindowInsetsAnimationCompat animation) {
+                        if ((animation.getTypeMask() & WindowInsetsCompat.Type.ime()) == 0) return;
+                        imeAnimations.add(animation);
+                        io.github.huleixin.tingyu.chrome.ComposeChromeHost shell = ((MainActivity) activity).getNativeShell();
+                        if (shell != null) shell.setImeAnimationRunning(true);
+                    }
+                    @Override public WindowInsetsCompat onProgress(WindowInsetsCompat insets, List<WindowInsetsAnimationCompat> running) {
+                        // The parent already reserves IME space. Keep progress delivery consistent
+                        // with onApplyWindowInsets so descendants cannot apply imePadding twice.
+                        return new WindowInsetsCompat.Builder(insets).setInsets(
+                            WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.ime(), Insets.NONE).build();
+                    }
+                    @Override public void onEnd(WindowInsetsAnimationCompat animation) {
+                        if (!imeAnimations.remove(animation)) return;
+                        io.github.huleixin.tingyu.chrome.ComposeChromeHost shell = ((MainActivity) activity).getNativeShell();
+                        if (shell != null) shell.setImeAnimationRunning(!imeAnimations.isEmpty());
+                    }
+                });
+            ViewCompat.requestApplyInsets(content);
+        }
+        return true;
+    }
+}

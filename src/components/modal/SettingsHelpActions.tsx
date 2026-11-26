@@ -1,0 +1,323 @@
+import StartupDiagnosticsControl from './StartupDiagnosticsControl';
+import AndroidAppUpdateCard from './AndroidAppUpdateCard';
+import {useFeedbackNavigation} from '../../services/feedback/navigation';
+import React, { useState } from 'react';
+import { isAndroidNativeRuntime } from '../../utils/platform';
+import { Activity, Check, ChevronRight, ClipboardCopy, Eraser, FileDown, Lightbulb, Loader2, MessageSquarePlus, Sparkles, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import {
+    canDeleteExportedDiagnostics,
+    deleteExportedDiagnostics,
+    exportDiagnosticReport,
+} from '../../services/exportDiagnosticReport';
+
+// 反馈面板按需加载：设置页首屏不下载它，点开才拉。
+const FeedbackPanel = React.lazy(() => import('./feedback/FeedbackPanel'));
+
+// src/components/modal/SettingsHelpActions.tsx
+
+type SettingsHelpActionsProps = {
+    onOpenReleaseNotes: () => void;
+    onOpenPonder?: () => void;
+    buildDiagnostics: () => Promise<string>;
+};
+
+type CopyState = 'idle' | 'working' | 'copied' | 'failed';
+type ExportState = 'idle' | 'working' | 'shared' | 'downloaded' | 'failed';
+type DeleteState = 'idle' | 'working' | 'done' | 'empty' | 'failed';
+type TrailState = 'idle' | 'working' | 'cleared' | 'failed' | 'unsupported';
+type FaultState = 'idle' | 'working' | 'shared' | 'failed';
+
+const SettingsHelpActions: React.FC<SettingsHelpActionsProps> = ({
+    onOpenReleaseNotes,
+    onOpenPonder,
+    buildDiagnostics,
+}) => {
+    const { t } = useTranslation();
+    const [copyState, setCopyState] = useState<CopyState>('idle');
+    const [exportState, setExportState] = useState<ExportState>('idle');
+    const [deleteState, setDeleteState] = useState<DeleteState>('idle');
+    const [deletedCount, setDeletedCount] = useState(0);
+    const [canDeleteDiagnostics] = useState(() => canDeleteExportedDiagnostics());
+    const [trailState, setTrailState] = useState<TrailState>('idle');
+    const [faultState, setFaultState] = useState<FaultState>('idle');
+    const feedbackOpen = useFeedbackNavigation(state=>state.open);
+    const setFeedbackOpen = (open:boolean)=>open?useFeedbackNavigation.setState({open:true,crash:false}):useFeedbackNavigation.getState().close();
+
+    const handleCopyDiagnostics = async () => {
+        setCopyState('working');
+        try {
+            const report = await buildDiagnostics();
+            await navigator.clipboard.writeText(report);
+            setCopyState('copied');
+        } catch (error) {
+            console.warn('[Settings] diagnostics:copy-failed', error);
+            setCopyState('failed');
+        }
+    };
+
+    const handleExportDiagnostics = async () => {
+        setExportState('working');
+        try {
+            const report = await buildDiagnostics();
+            const result = await exportDiagnosticReport(report, t('help.exportDiagnostics'));
+            // 用户在系统面板里取消不算失败，回到空闲状态即可。
+            setExportState(result === 'cancelled' ? 'idle' : result);
+        } catch (error) {
+            console.warn('[Settings] diagnostics:export-failed', error);
+            setExportState('failed');
+        }
+    };
+
+    const handleDeleteDiagnostics = async () => {
+        setDeleteState('working');
+        try {
+            const count = await deleteExportedDiagnostics();
+            setDeletedCount(count);
+            setDeleteState(count > 0 ? 'done' : 'empty');
+        } catch (error) {
+            console.warn('[Settings] diagnostics:delete-failed', error);
+            setDeleteState('failed');
+        }
+    };
+
+    /**
+     * 取证起点：清空原生播放轨迹，让下一次复现的报告只有这一次的事件。
+     * 轨迹本身常开写入，不清空也能用，但一次复现前的清零能把判读时间从几分钟压到几十秒。
+     */
+    const handleClearPlaybackTrail = async () => {
+        setTrailState('working');
+        try {
+            const plugin = (window as any).Capacitor?.Plugins?.TingyuPlayback ?? null;
+            if (typeof plugin?.clearPlaybackDiagnostics !== 'function') {
+                setTrailState('unsupported');
+                return;
+            }
+            await plugin.clearPlaybackDiagnostics();
+            setTrailState('cleared');
+        } catch (error) {
+            console.warn('[Settings] playback trail:clear-failed', error);
+            setTrailState('failed');
+        }
+    };
+
+    /**
+     * 「背屏故障诊断」：先让原生层立刻采一条状态快照（不依赖主界面是否还活着），
+     * 再把整份诊断（含锁屏前后 0/5/60 秒的采样）交给系统分享面板。
+     */
+    const handleRearFaultDiagnostics = async () => {
+        setFaultState('working');
+        try {
+            const plugin = (window as any).Capacitor?.Plugins?.FoliaNative ?? null;
+            if (typeof plugin?.captureRearFaultDiagnostics === 'function') {
+                await plugin.captureRearFaultDiagnostics();
+            }
+            const report = await buildDiagnostics();
+            const result = await exportDiagnosticReport(report, '听屿 背屏故障诊断');
+            setFaultState(result === 'cancelled' ? 'idle' : 'shared');
+        } catch (error) {
+            console.warn('[Settings] rear-fault:export-failed', error);
+            setFaultState('failed');
+        }
+    };
+
+    const CopyIcon = copyState === 'working' ? Loader2 : copyState === 'copied' ? Check : ClipboardCopy;
+    const ExportIcon = exportState === 'working'
+        ? Loader2
+        : exportState === 'shared' || exportState === 'downloaded'
+            ? Check
+            : FileDown;
+    const DeleteIcon = deleteState === 'working' ? Loader2 : deleteState === 'done' ? Check : Trash2;
+    const TrailIcon = trailState === 'working' ? Loader2 : trailState === 'cleared' ? Check : Eraser;
+    const FaultIcon = faultState === 'working' ? Loader2 : faultState === 'shared' ? Check : Activity;
+
+    const feedbackCard = (
+        <button
+            type="button"
+            data-testid="help-feedback"
+            onClick={() => setFeedbackOpen(true)}
+            className="flex w-full items-center gap-3 rounded-2xl p-4 text-left transition-colors"
+            style={{
+                color: 'var(--text-primary)',
+                background: 'color-mix(in srgb, currentColor 5%, transparent)',
+            }}
+         data-settings-style='{"align":"center","gap":12,"radius":16,"padding":[16,14,16,14],"tone":"text","fill":true}' data-settings-layout="row">
+            <MessageSquarePlus size={19} className="shrink-0 opacity-80" aria-hidden="true" />
+            <span className="min-w-0 flex-1" data-settings-style='{"grow":true}' data-settings-layout="column">
+                <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">{t('help.feedback')}</span>
+                <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">{t('help.feedbackDescription')}</span>
+            </span>
+            <ChevronRight size={17} className="shrink-0 opacity-45" aria-hidden="true" />
+        </button>
+    );
+
+    const feedbackLayer = feedbackOpen ? (
+        <React.Suspense fallback={null}>
+            <FeedbackPanel onClose={() => setFeedbackOpen(false)} />
+        </React.Suspense>
+    ) : null;
+
+    const releaseNotes = (
+        <button
+            type="button"
+            data-testid="help-release-notes"
+            onClick={onOpenReleaseNotes}
+            className="flex w-full items-center gap-3 rounded-2xl bg-white/5 p-4 text-left transition-colors hover:bg-white/10"
+            style={{ color: 'var(--text-primary)' }}
+         data-settings-style='{"align":"center","gap":12,"radius":16,"fill":true,"padding":[16,16,16,16],"tone":"text"}' data-settings-layout="row">
+            <Sparkles size={19} className="shrink-0 opacity-75" aria-hidden="true" />
+            <span data-settings-layout="column">
+                <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">{t('help.releaseNotes')}</span>
+                <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">{t('help.releaseNotesDescription')}</span>
+            </span>
+        </button>
+    );
+
+    // Android keeps update check, release history, open-source licenses, and feedback unified in the About page.
+    if (isAndroidNativeRuntime()) return <div className="space-y-3" data-settings-style='{"gap":10}' data-settings-layout="column"><AndroidAppUpdateCard />{feedbackCard}{feedbackLayer}</div>;
+
+    return (
+        <>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-settings-style='{"columns":1,"gap":12}' data-settings-layout="grid">
+            <div className="sm:col-span-2" data-settings-layout="column">{feedbackCard}</div>
+            <StartupDiagnosticsControl/>
+            {releaseNotes}
+            <button
+                type="button"
+                data-testid="help-copy-diagnostics"
+                onClick={() => void handleCopyDiagnostics()}
+                disabled={copyState === 'working'}
+                className="flex items-center gap-3 rounded-2xl bg-white/5 p-4 text-left transition-colors hover:bg-white/10 disabled:opacity-50 disabled:cursor-default sm:col-span-2"
+                style={{ color: 'var(--text-primary)' }}
+             data-settings-style='{"align":"center","gap":12,"radius":16,"fill":true,"padding":[16,16,16,16],"tone":"text"}' data-settings-layout="row">
+                <CopyIcon
+                    size={19}
+                    className={`shrink-0 opacity-75 ${copyState === 'working' ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                />
+                <span data-settings-layout="column">
+                    <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">
+                        {copyState === 'copied'
+                            ? t('help.copyDiagnosticsCopied')
+                            : copyState === 'failed'
+                                ? t('help.copyDiagnosticsFailed')
+                                : t('help.copyDiagnostics')}
+                    </span>
+                    <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">{t('help.copyDiagnosticsDescription')}</span>
+                </span>
+            </button>
+            <button
+                type="button"
+                data-testid="help-clear-playback-trail"
+                onClick={() => void handleClearPlaybackTrail()}
+                disabled={trailState === 'working'}
+                className="flex items-center gap-3 rounded-2xl bg-white/5 p-4 text-left transition-colors hover:bg-white/10 disabled:opacity-50 disabled:cursor-default sm:col-span-2"
+                style={{ color: 'var(--text-primary)' }}
+             data-settings-style='{"align":"center","gap":12,"radius":16,"fill":true,"padding":[16,16,16,16],"tone":"text"}' data-settings-layout="row">
+                <TrailIcon
+                    size={19}
+                    className={`shrink-0 opacity-75 ${trailState === 'working' ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                />
+                <span data-settings-layout="column">
+                    <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">
+                        {trailState === 'cleared'
+                            ? '播放轨迹已清空'
+                            : trailState === 'failed'
+                                ? '清空播放轨迹失败'
+                                : trailState === 'unsupported'
+                                    ? '当前平台不支持'
+                                    : '清空播放轨迹（取证用）'}
+                    </span>
+                    <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">
+                        只清空原生播放轨迹，不影响播放列表、音源设置与任何用户数据
+                    </span>
+                </span>
+            </button>
+            <button
+                type="button"
+                data-testid="help-rear-fault"
+                onClick={() => void handleRearFaultDiagnostics()}
+                disabled={faultState === 'working'}
+                className="flex items-center gap-3 rounded-2xl bg-white/5 p-4 text-left transition-colors hover:bg-white/10 disabled:opacity-50 disabled:cursor-default sm:col-span-2"
+                style={{ color: 'var(--text-primary)' }}
+             data-settings-style='{"align":"center","gap":12,"radius":16,"fill":true,"padding":[16,16,16,16],"tone":"text"}' data-settings-layout="row">
+                <FaultIcon
+                    size={19}
+                    className={`shrink-0 opacity-75 ${faultState === 'working' ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                />
+                <span data-settings-layout="column">
+                    <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">
+                        {faultState === 'shared'
+                            ? '背屏故障诊断已导出'
+                            : faultState === 'failed'
+                                ? '背屏故障诊断导出失败'
+                                : '背屏故障诊断'}
+                    </span>
+                    <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">
+                        立刻采集一次背屏状态并导出；锁屏前后 0/5/60 秒的快照会自动记录，不需要重新打开应用
+                    </span>
+                </span>
+            </button>
+            <button
+                type="button"
+                data-testid="help-export-diagnostics"
+                onClick={() => void handleExportDiagnostics()}
+                disabled={exportState === 'working'}
+                className={`flex items-center gap-3 rounded-2xl bg-white/5 p-4 text-left transition-colors hover:bg-white/10 disabled:opacity-50 disabled:cursor-default ${canDeleteDiagnostics ? '' : 'sm:col-span-2'}`}
+                style={{ color: 'var(--text-primary)' }}
+             data-settings-style='{"align":"center","gap":12,"radius":16,"fill":true,"padding":[16,16,16,16],"tone":"text"}' data-settings-layout="row">
+                <ExportIcon
+                    size={19}
+                    className={`shrink-0 opacity-75 ${exportState === 'working' ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                />
+                <span data-settings-layout="column">
+                    <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">
+                        {exportState === 'shared'
+                            ? t('help.exportDiagnosticsShared')
+                            : exportState === 'downloaded'
+                                ? t('help.exportDiagnosticsDownloaded')
+                                : exportState === 'failed'
+                                    ? t('help.exportDiagnosticsFailed')
+                                    : t('help.exportDiagnostics')}
+                    </span>
+                    <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">{t('help.exportDiagnosticsDescription')}</span>
+                </span>
+            </button>
+            {canDeleteDiagnostics ? (
+                <button
+                    type="button"
+                    data-testid="help-delete-diagnostics"
+                    onClick={() => void handleDeleteDiagnostics()}
+                    disabled={deleteState === 'working'}
+                    className="flex items-center gap-3 rounded-2xl bg-white/5 p-4 text-left transition-colors hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-default"
+                    style={{ color: 'var(--text-primary)' }}
+                 data-settings-style='{"align":"center","gap":12,"radius":16,"fill":true,"padding":[16,16,16,16],"tone":"text"}' data-settings-layout="row">
+                    <DeleteIcon
+                        size={19}
+                        className={`shrink-0 opacity-75 ${deleteState === 'working' ? 'animate-spin' : ''}`}
+                        aria-hidden="true"
+                    />
+                    <span data-settings-layout="column">
+                        <span className="block text-sm font-semibold" data-settings-style='{"font":14,"weight":600}' data-settings-layout="column">
+                            {deleteState === 'done'
+                                ? t('help.deleteDiagnosticsDone', { count: deletedCount })
+                                : deleteState === 'empty'
+                                    ? t('help.deleteDiagnosticsEmpty')
+                                    : deleteState === 'failed'
+                                        ? t('help.deleteDiagnosticsFailed')
+                                        : t('help.deleteDiagnostics')}
+                        </span>
+                        <span className="mt-0.5 block text-xs opacity-55" data-settings-style='{"font":12,"tone":"muted","margin":[0,2,0,0]}' data-settings-layout="column">{t('help.deleteDiagnosticsDescription')}</span>
+                    </span>
+                </button>
+            ) : null}
+        </div>
+        {feedbackLayer}
+        </>
+    );
+};
+
+export default SettingsHelpActions;

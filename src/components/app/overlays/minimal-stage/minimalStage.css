@@ -1,0 +1,1240 @@
+/* src/components/app/overlays/minimal-stage/minimalStage.css
+   Minimal front stage: two pages, one transport, one ambient background.
+
+   Cost model, because this mode exists to be cheap:
+   · the background is five flat layers of gradients — no canvas, no shader, no backdrop-filter, and
+     no `filter: blur()` anywhere, so there is no full-screen pass per frame;
+   · only `transform` and `opacity` are animated, both compositor-only, both on very long periods;
+   · paging is a transformed strip driven from the gesture frame, not a scroll or a state change;
+   · nothing in this file animates a property that triggers layout, and nothing in it repaints more
+     than one element per frame. The two rules that used to break that — a blend-mode texture over
+     the whole screen and a strip position published as an inherited custom property — are gone;
+     see the notes on `.min-amb__grain` and `.min-pos` for what they cost and why they went. */
+
+@property --min-base { syntax: '<color>'; inherits: true; initial-value: #08130f; }
+@property --min-field-1 { syntax: '<color>'; inherits: true; initial-value: #0d2a22; }
+@property --min-field-2 { syntax: '<color>'; inherits: true; initial-value: #10231f; }
+@property --min-bloom { syntax: '<color>'; inherits: true; initial-value: #6a4a2c; }
+@property --min-accent { syntax: '<color>'; inherits: true; initial-value: #6fe6c3; }
+@property --min-lyric-accent { syntax: '<color>'; inherits: true; initial-value: #f3d8c8; }
+@property --aurora-a { syntax: '<color>'; inherits: true; initial-value: #5da99a; }
+@property --aurora-b { syntax: '<color>'; inherits: true; initial-value: #4c8587; }
+@property --aurora-c { syntax: '<color>'; inherits: true; initial-value: #986b52; }
+
+.min {
+    position: absolute;
+    inset: 0;
+    z-index: 65;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--min-base);
+    color: var(--min-ink);
+    transition: --min-base 760ms ease, --min-field-1 760ms ease, --min-field-2 760ms ease,
+        --min-bloom 760ms ease, --min-accent 760ms ease, --min-lyric-accent 560ms ease;
+    font-family: system-ui, -apple-system, 'PingFang SC', 'MiSans', 'Microsoft YaHei', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    /* The activity is edge to edge: this box starts under the status bar and ends under the gesture
+       pill. --folia-main-inset-* is the rectangle the native side measures for the WebView (see
+       services/androidMainInsets.ts); it is the only safe-area source that is correct inside this
+       app, because the SystemBars plugin's automatic padding is switched off and env() therefore
+       reports zero. Reserving it here — on the shell, not on each control — keeps the background
+       full bleed (a background paints the padding box too) while every control stays clear of the
+       bars, and it cannot double count against anything: nothing else pads this layer.
+       env() remains the fallback for a plain browser, where the variables do not exist. */
+    padding: var(--folia-main-inset-top, env(safe-area-inset-top, 0px))
+        var(--folia-main-inset-right, env(safe-area-inset-right, 0px))
+        var(--folia-main-inset-bottom, env(safe-area-inset-bottom, 0px))
+        var(--folia-main-inset-left, env(safe-area-inset-left, 0px));
+}
+
+/* Arriving and leaving. The player page is mounted by a view change, so the transition has to live
+   on the mount: the whole shell rises from the bottom edge over the mini player it came from, and
+   the page content fades up a beat later so the two movements do not read as one slide of a flat
+   picture. Compositor-only properties; nothing here re-lays out. */
+.min[data-phase='enter'] {
+    animation: min-rise 420ms cubic-bezier(0.2, 0.72, 0.16, 1) both;
+}
+
+.min[data-phase='exit'] {
+    animation: min-fall 300ms cubic-bezier(0.42, 0, 0.74, 0.3) both;
+    pointer-events: none;
+}
+
+@keyframes min-rise {
+    from { transform: translate3d(0, 100%, 0); }
+    to { transform: none; }
+}
+
+@keyframes min-fall {
+    from { transform: none; }
+    to { transform: translate3d(0, 100%, 0); }
+}
+
+@keyframes min-content-in {
+    from { opacity: 0; transform: translate3d(0, 16px, 0); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes min-content-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes min-chrome-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.min[data-theme='dark'] {
+    --min-ink: #f3faf6;
+    --min-ink-bright: #ffffff;
+    --min-muted: rgb(240 248 244 / 44%);
+    --min-track: rgb(255 255 255 / 22%);
+    --min-fill: rgb(246 252 249 / 92%);
+    --min-line: rgb(255 255 255 / 13%);
+    --min-veil: 0 0 0;
+    --min-shade: 0 0 0;
+    --min-shadow: 0 28px 60px -22px rgb(0 0 0 / 62%), 0 4px 16px rgb(0 0 0 / 26%);
+}
+
+.min[data-theme='light'] {
+    --min-ink: #10231d;
+    --min-ink-bright: #061310;
+    --min-muted: rgb(16 35 29 / 58%);
+    --min-track: rgb(16 35 29 / 18%);
+    --min-fill: rgb(16 35 29 / 78%);
+    --min-line: rgb(16 35 29 / 14%);
+    --min-veil: 255 255 255;
+    --min-shade: 12 32 26;
+    --min-shadow: 0 24px 52px -24px rgb(24 56 46 / 34%), 0 3px 12px rgb(24 56 46 / 12%);
+}
+
+/* Static ambience stops movement, while sleeve colours can still blend on a song change. */
+
+.min[data-chrome-hidden] .min-top,
+.min[data-chrome-hidden] .min-transport,
+.min[data-chrome-hidden] .min-dots {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+}
+
+/* ---------------------------------------------------------------- ambience */
+
+/* ---------------------------------------------------------------- top bar */
+
+.min-top {
+    position: relative;
+    z-index: 3;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    /* The status bar is already reserved by .min's padding — repeating it here is how this row
+       ended up drawn on top of the clock. What remains is the gap between the bar and the icons. */
+    padding: 6px 10px 2px;
+}
+
+.min-top__actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.min-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--min-ink);
+    cursor: pointer;
+    transition: transform 160ms ease, opacity 160ms ease, background-color 160ms ease;
+}
+
+.min-icon:active:not(:disabled) {
+    transform: scale(0.9);
+}
+
+.min-icon:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.min-icon--like[aria-pressed='true'] {
+    color: #ff7b88;
+}
+
+.min-icon--stage {
+    color: var(--min-ink);
+    opacity: 0.92;
+}
+
+.min-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 5;
+    width: 232px;
+}
+
+.min-menu .mps-menu {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 100%;
+    color: var(--mps-ink);
+    font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- pager */
+
+/* The strip is moved by transform, not by native scrolling.
+   The reason is the release: with scroll snap the commit animation belongs to the platform, and on
+   this WebView a half-page drag snaps in about 90ms — that is the "sudden" feel. Owning the offset
+   gives a 1:1 follow while the finger is down, a spring back below the threshold, a bounded
+   ease-out on commit, and keeps the vertical lyric scroll on the browser (touch-action: pan-y). */
+.min-pager {
+    position: relative;
+    z-index: 2;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    touch-action: pan-y;
+}
+
+.min-track {
+    display: flex;
+    width: 200%;
+    height: 100%;
+    will-change: transform;
+    /* Overwritten every frame while a drag or a commit animation is running; the value here only
+       covers the first paint, before the stage has measured anything. */
+    transform: translate3d(0, 0, 0);
+}
+
+.min-page {
+    flex: 0 0 50%;
+    width: 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Secondary elements dissolve slightly as their page leaves, so a swipe reads as two surfaces
+   trading places rather than one sheet sliding.
+   These two opacities, the sleeve's parallax and the dots all follow the same strip position, but
+   they are written as inline styles on the four elements that use them (see applyPos in
+   MinimalStage) rather than read back from a `--min-pos` custom property on the shell. A custom
+   property that is not registered through @property is an opaque token stream, so every change to
+   it invalidates style for every element that inherits it — the whole lyric column included. On a
+   real song that was 60 style recalculations and ~100ms of the main thread for a single swipe on
+   this desktop, and a skipped frame or three on a phone, which is what the flash was made of. */
+
+/* ---------------------------------------------------------------- cover page */
+
+/* One column, like a record sleeve: artwork, title, artist and quality all start on the same left
+   edge as the progress bar below them. The earlier centred block was why the page read as a
+   template — nothing shared an alignment, so nothing composed. */
+.min-cover {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    /* Keep the artwork and all caption rows together at the bottom of the available column.
+       Spare height becomes breathing room above the sleeve, instead of being split into large,
+       unrelated gaps between metadata, lyric and progress. */
+    justify-content: flex-end;
+    min-height: 0;
+    overflow: hidden;
+    padding: clamp(12px, 2.4vh, 22px) 26px 2px;
+    gap: 0;
+}
+
+/* Parallax: while the strip is dragged, the sleeve drifts slightly against the page. The offset is
+   written straight onto this element from the gesture frame, so at rest it is a constant. */
+.min-cover__stage {
+    position: relative;
+    flex: none;
+    /* The stage owns the width so the ghost behind the sleeve is always the sleeve's size — when
+       only the artwork was capped by height, the hairline stayed at the column width and floated
+       off to one side on a short screen. */
+    width: min(90%, 39vh);
+    /* Left, not centred: when the height cap shrinks the sleeve on a short screen, a centred square
+       would drift off the column that the title and the progress bar still share. */
+    align-self: flex-start;
+    margin-bottom: clamp(15px, 2vh, 19px);
+    will-change: transform;
+}
+
+/* The second print behind the sleeve: a hairline offset up and right, the depth of a stack of paper
+   rather than a shadow or a glow. */
+.min-cover__ghost {
+    position: absolute;
+    inset: 0;
+    border: 1px solid color-mix(in srgb, var(--min-ink) 12%, transparent);
+    border-radius: clamp(18px, 7%, 30px);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--min-ink) 10%, transparent), color-mix(in srgb, var(--min-bloom) 16%, transparent));
+    transform: translate3d(-3px, 1px, 0) rotate(-5deg) scale(0.99);
+    pointer-events: none;
+}
+
+.min-cover__art {
+    position: relative;
+    /* The sleeve is the column: its left and right edges are the title's and the progress bar's.
+       The height cap lives on .min-cover__stage, so a short screen shrinks the whole group rather
+       than leaving the artwork floating inside a wider frame. */
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    flex: none;
+    animation: min-float 19s ease-in-out infinite alternate;
+}
+
+.min-cover__art-layer[data-layer='outgoing'],
+.min-cover__art-layer--outgoing { z-index: 1; pointer-events: none; }
+.min-cover__art-layer--current { z-index: 2; }
+.min-cover__art-layer--incoming { animation: min-cover-in 400ms cubic-bezier(.22,.68,.2,1) both; }
+/* Keep full coverage beneath the incoming image: fading both layers dips through the backdrop. */
+.min-cover__art-layer--outgoing { opacity: 1; }
+
+@keyframes min-cover-in {
+    from { opacity: 0; transform: scale(.995); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Life, not motion: ±2.5px over 19s. It reads as the page breathing, and it is paused whenever the
+   lyric page is the visible one. */
+@keyframes min-float {
+    from { transform: translate3d(0, -2.5px, 0); }
+    to { transform: translate3d(0, 2.5px, 0); }
+}
+
+.min[data-page='lyrics'] .min-cover__art {
+    animation-play-state: paused;
+}
+
+/* The artwork's own light. A wide, very soft radial behind the frame, so the cover sits in light
+   instead of carrying a stroke. No blur filter — the gradient is already soft. */
+.min-cover__art::before {
+    content: '';
+    position: absolute;
+    inset: -18%;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--min-bloom) 46%, transparent) 0%, transparent 76%);
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.min-art {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: clamp(18px, 7%, 30px);
+    overflow: hidden;
+    background: color-mix(in srgb, var(--min-base) 74%, var(--min-ink) 8%);
+    box-shadow: var(--min-shadow), inset 0 1px 0 color-mix(in srgb, var(--min-ink) 16%, transparent);
+    /* Keeps the round corner from revealing the glow behind it on some WebView builds. */
+    transform: translateZ(0);
+}
+
+.min-art__image-slot { position: absolute; inset: 0; }
+
+.min-art__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Never stretch: the artwork keeps its own ratio and is cropped, not squashed. */
+    object-fit: cover;
+    object-position: center;
+    opacity: 1;
+}
+
+.min-art__img[data-top] {
+    opacity: 1;
+}
+
+.min-art__empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--min-muted);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--min-field-1) 66%, transparent), transparent 73%);
+}
+
+.min-cover__meta {
+    grid-area: 1 / 1;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: clamp(4px, .6vh, 6px);
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+}
+
+.min-cover__meta-stack {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+}
+
+.min-cover__meta--incoming { animation: min-meta-in 260ms cubic-bezier(.22,.68,.2,1) both; }
+
+@keyframes min-meta-in {
+    from { opacity: .72; transform: translate3d(0, 3px, 0); }
+    to { opacity: 1; transform: none; }
+}
+
+.min-cover__title {
+    margin: 0;
+    max-width: 100%;
+    font-size: clamp(23px, 7.4vw, 30px);
+    font-weight: 600;
+    letter-spacing: -0.014em;
+    line-height: 1.26;
+    color: var(--min-ink);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    word-break: break-word;
+}
+
+.min-cover__artist {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    max-width: 100%;
+    font-size: 13.5px;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: var(--min-muted);
+}
+
+.min-cover__artist span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* The chevron is typography, not a control: it is part of the artist line in the reference. */
+.min-cover__artist svg {
+    flex: none;
+    opacity: 0.55;
+}
+
+.min-cover__foot {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 24px;
+    margin-top: clamp(6px, .9vh, 8px);
+}
+.min-cover__catalog-version {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-radius: 10px;
+    color: color-mix(in srgb, currentColor 76%, transparent);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.min-live-lyric {
+    position: relative;
+    contain: layout paint;
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    font-size: clamp(17px, 4.6vw, 19px);
+    height: max(54px, 3em);
+    margin-top: clamp(16px, 2.2vh, 20px);
+    display: grid;
+    place-items: center;
+}
+
+.min-live-lyric__text {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: none;
+    color: color-mix(in srgb, var(--min-ink) 83%, transparent);
+    font: inherit;
+    font-size: inherit;
+    font-weight: 450;
+    line-height: 1.42;
+    letter-spacing: 0.005em;
+    text-align: center;
+    word-break: break-word;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.min-live-lyric__copy {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.min-live-lyric__text:active {
+    color: var(--min-ink);
+}
+.min-live-lyric__text:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--min-ink) 44%, transparent);
+    outline-offset: 4px;
+    border-radius: 2px;
+}
+
+.min-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    min-width: 0;
+}
+
+.min-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 11px;
+    border: 1px solid color-mix(in srgb, var(--min-ink) 20%, transparent);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.055em;
+    line-height: 1;
+    color: color-mix(in srgb, var(--min-ink) 72%, transparent);
+    white-space: nowrap;
+}
+
+/* One pill, holding both facts: "FLAC · 无损". Two pills read as badges, one reads as a caption.
+   Gold spec (第 18 轮)：icon #D8B777 / text #E5C995 / border #B8955C 1px，极淡暖金底，27px 高。 */
+.min-chip[data-tone='gold'] {
+    height: 27px;
+    gap: 6px;
+    border-color: #b8955c;
+    color: #e5c995;
+    background: rgba(184, 149, 92, 0.10);
+}
+
+.min-chip__gold-icon {
+    flex: none;
+    color: #d8b777;
+}
+
+/* #e2c48c on paper is invisible; the gold chip needs a darker ink to stay a chip. */
+.min[data-theme='light'] .min-chip[data-tone='gold'] {
+    border-color: #a07c33;
+    color: #8a6a26;
+    background: rgba(160, 124, 51, 0.08);
+}
+
+.min[data-theme='light'] .min-chip__gold-icon {
+    color: #a07c33;
+}
+
+/* The playing indicator from the reference, at the right end of the caption row. Four bars, one
+   short keyframe each — it stops dead when the transport is not playing. */
+.min-wave {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2.5px;
+    height: 15px;
+    margin-left: auto;
+    color: color-mix(in srgb, var(--min-ink) 62%, transparent);
+}
+
+.min-wave i {
+    display: block;
+    width: 2px;
+    height: var(--h, 100%);
+    border-radius: 1px;
+    background: currentColor;
+    transform: scaleY(0.32);
+    transform-origin: bottom;
+    animation: min-wave 2.1s ease-in-out infinite;
+}
+
+.min-wave[data-paused] i {
+    animation: none;
+    transform: scaleY(0.42);
+    opacity: 0.72;
+}
+
+@keyframes min-wave {
+    0%, 100% { transform: scaleY(0.32); }
+    50% { transform: scaleY(1); }
+}
+
+/* ---------------------------------------------------------------- lyrics page */
+
+.min-lyrics {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.min-lyrics__head {
+    flex: none;
+    padding: 2px 26px 6px;
+}
+
+/* The sleeve, in miniature, next to the title — the "inner page" credit block of the reference.
+   It also gives the eye a fixed anchor when the lyric column is moving. */
+.min-lyrics__id {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    /* Resting value for the cover-side position; the gesture frame overwrites it inline. */
+    opacity: 0.5;
+}
+
+.min-lyrics__thumb {
+    flex: none;
+    width: 46px;
+    height: 46px;
+}
+
+.min-art--thumb {
+    border-radius: 11px;
+    box-shadow: 0 10px 22px -14px rgb(0 0 0 / 70%);
+}
+
+.min-art--thumb .min-art__empty svg {
+    width: 19px;
+    height: 19px;
+}
+
+.min-lyrics__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.min-lyrics__title {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    color: var(--min-ink);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    word-break: break-word;
+}
+
+.min-lyrics__artist {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    font-size: 12.5px;
+    letter-spacing: 0.01em;
+    color: var(--min-muted);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.min-lyrics__artist svg {
+    flex: none;
+    opacity: 0.5;
+}
+
+.min-lyrics__artist > span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.min-lyrics__rule {
+    display: block;
+    width: 22px;
+    height: 1.5px;
+    margin-top: 11px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--min-ink) 36%, transparent);
+}
+
+.min-lyrics__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-y: contain;
+    /* Vertical only: the browser keeps the list, and horizontal moves are left to the pager, which
+       sees them as pointer events and tracks the finger. `pan-x pan-y` let the two compete for the
+       same gesture, which is why a swipe that started on a lyric line used to do nothing at all. */
+    touch-action: pan-y;
+    scroll-behavior: auto;
+    padding: 0 26px;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, black 34px, black 82%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0, black 34px, black 82%, transparent 100%);
+}
+
+.min-lyrics__scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.min-lyrics__column {
+    position: relative;
+    padding: clamp(14px, 3.6vh, 36px) 0 46vh;
+    /* Remounted (keyed) whenever the lyric set changes, so this plays once per song: the new lyrics
+       arrive instead of replacing the old ones between two frames. */
+    animation: min-lyric-swap 320ms cubic-bezier(0.22, 0.68, 0.2, 1) both;
+}
+
+@keyframes min-lyric-swap {
+    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+    to { opacity: 1; transform: none; }
+}
+
+.min-line {
+    /* A fixed pitch. The active line grows *inside* this box rather than growing the box, so a line
+       change never moves the column under the reader's thumb — and the pitch stays tight, like a
+       printed lyric sheet, instead of a stack of cards.
+       `content-visibility: auto` used to be set here and is deliberately gone: off-screen lines then
+       reported an estimated height, so scrolling to a distant line landed in the wrong place and the
+       correction shifted the column again. */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(52px * var(--min-lyric-scale, 1));
+    margin: 0 0 calc(8px * var(--min-lyric-scale, 1));
+    transition: opacity 280ms ease;
+}
+
+/* Lines already sung sit back a little; the eye belongs on the current one. */
+.min-line[data-past] {
+    opacity: 0.62;
+}
+
+.min-line__text {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    font-family: inherit;
+    font-size: calc(20px * var(--min-lyric-scale, 1));
+    font-weight: 500;
+    line-height: 1.34;
+    letter-spacing: 0.008em;
+    color: var(--min-muted);
+    cursor: pointer;
+    transform-origin: left center;
+    /* Colour is the slow part (a sung line cools into place); the press is the fast part. */
+    transition: color 300ms ease, font-size 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+        transform 130ms ease, opacity 130ms ease;
+}
+
+.min-line__text:active:not(:disabled) {
+    transform: scale(0.993);
+    opacity: 0.82;
+}
+
+.min-line[data-active] .min-line__text {
+    font-size: calc(30px * var(--min-lyric-scale, 1));
+    font-weight: 600;
+    line-height: 1.22;
+    letter-spacing: -0.008em;
+    /* Near-white, but tinted a little toward the sleeve: that tint is what makes the current line
+       feel printed on this page rather than pasted on it. */
+    color: color-mix(in srgb, var(--min-ink-bright) 84%, var(--min-bloom));
+    cursor: default;
+}
+
+.min-line__text [data-ch] {
+    transition: color 150ms linear;
+}
+
+.min-line[data-active] .min-line__text [data-sung] {
+    color: var(--min-lyric-accent, var(--min-accent));
+}
+
+/* Production credits — 歌名-歌手, 词：, 作曲：, 编曲：, 制作人 — printed at the weight of a caption
+   rather than a line of the song. They keep their timestamps, their place in the column and their
+   seek behaviour; what changes is the size they are drawn at, and that the active one does not grow
+   to the singing size (a credit growing to 30px is the thing this exists to stop). The recognition
+   itself is narrow and lives in minimalLyrics.ts; anything uncertain stays a lyric. */
+.min-line[data-credit] {
+    min-height: calc(24px * var(--min-lyric-scale, 1));
+    margin-bottom: calc(2px * var(--min-lyric-scale, 1));
+}
+
+.min-line[data-credit] .min-line__text {
+    font-size: calc(12.5px * var(--min-lyric-scale, 1));
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: color-mix(in srgb, var(--min-muted) 78%, transparent);
+}
+
+.min-line[data-credit] .min-line__text [data-sung] {
+    color: color-mix(in srgb, var(--min-lyric-accent, var(--min-accent)) 66%, var(--min-muted));
+}
+
+.min-line[data-credit][data-active] .min-line__text {
+    font-size: calc(14px * var(--min-lyric-scale, 1));
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.min-line__text:focus-visible {
+    outline: 2px solid var(--min-accent);
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+
+.min-line__beat {
+    color: var(--min-muted);
+    opacity: 0.5;
+}
+
+.min-line__secondary {
+    margin: 2px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--min-muted);
+    opacity: 0.72;
+    word-break: break-word;
+}
+
+.min-lyrics__empty {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 32px 60px;
+}
+
+.min-lyrics__empty {
+    flex-direction: column;
+    gap: 10px;
+    color: var(--min-muted);
+}
+
+.min-lyrics__empty svg {
+    opacity: 0.42;
+}
+
+.min-lyrics__empty p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--min-muted);
+    letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------- transport */
+
+.min-transport {
+    position: relative;
+    z-index: 3;
+    flex: none;
+    padding: 2px 26px 0;
+}
+
+.min-seek {
+    width: 100%;
+}
+
+/* Reuse the shared ProgressBar but lay it out like the reference: the track owns a full row and the
+   two times sit under its ends. Only the parts the widget publishes are touched, so its clock,
+   drag ownership and accessibility stay exactly as they are everywhere else. */
+.min-seek [data-folium-part='progress.root'] {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        'track track'
+        'time duration';
+    align-items: center;
+    gap: 2px 12px;
+    width: 100%;
+}
+
+.min-seek [data-folium-part='progress.track'] {
+    grid-area: track;
+    position: relative;
+    height: 26px;
+    border-radius: 999px;
+    background: transparent;
+}
+
+.min-seek [data-folium-part='progress.track']::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 3px;
+    transform: translateY(-50%);
+    border-radius: 999px;
+    background: var(--min-track);
+}
+
+.min-seek [data-folium-part='progress.fill'] {
+    top: 50%;
+    height: 3px;
+    transform: translateY(-50%);
+    border-radius: 999px;
+    background: var(--min-fill);
+}
+
+.min-seek [data-folium-part='progress.thumb'] {
+    width: 9px;
+    height: 9px;
+    opacity: 1;
+    background: var(--min-fill);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--min-fill) 16%, transparent);
+}
+
+.min-seek [data-folium-part='progress.time'],
+.min-seek [data-folium-part='progress.duration'] {
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    width: auto;
+    opacity: 1;
+    color: var(--min-muted);
+}
+
+.min-seek [data-folium-part='progress.time'] {
+    grid-area: time;
+    text-align: left;
+}
+
+.min-seek [data-folium-part='progress.duration'] {
+    grid-area: duration;
+    text-align: right;
+}
+
+.min-seek [data-folium-part='progress.root'] > :first-child:empty,
+.min-seek [data-folium-part='progress.root'] > :last-child:empty {
+    display: none;
+}
+
+.min-buttons {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    align-items: center;
+    justify-items: center;
+    margin-top: 12px;
+}
+
+/* The mode name, for a second and a half after the listener changes it. It sits above the button it
+   belongs to, in the empty band between the seek row and the transport — not at the top of the
+   screen, where the old global toast used to land on top of the first lyric line. */
+.min-mode-hint {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 1px);
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 9px;
+    border: 1px solid color-mix(in srgb, var(--min-ink) 12%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--min-base) 76%, transparent);
+    color: color-mix(in srgb, var(--min-ink) 88%, transparent);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: min-mode-hint 1500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes min-mode-hint {
+    0% { opacity: 0; transform: translate3d(0, 3px, 0); }
+    10% { opacity: 1; transform: none; }
+    74% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.min-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 50px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--min-ink);
+    cursor: pointer;
+    transition: transform 150ms ease, opacity 150ms ease, color 150ms ease;
+}
+
+.min-btn:active:not(:disabled) {
+    transform: scale(0.9);
+}
+
+.min-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.min-btn--aux {
+    color: color-mix(in srgb, var(--min-ink) 74%, transparent);
+}
+
+.min-btn--aux[data-active] {
+    /* 激活态薄荷绿（第 20 轮）：图标包 control_play 示例色。 */
+    color: var(--min-mint, #6dbdad);
+}
+
+.min[data-theme='light'] .min-btn--aux[data-active] {
+    color: #3e9c88;
+}
+
+.min-btn--play {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    justify-self: center;
+    color: var(--min-ink-bright);
+}
+
+/* A glass disc, not an outline: a faint fill that catches the top edge, plus one soft drop shadow.
+   The reference's play button is the only element on the page that sits above the surface. */
+.min-play-ring {
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid color-mix(in srgb, var(--min-ink) 44%, transparent);
+    border-radius: 50%;
+    background:
+        radial-gradient(80% 80% at 50% 18%, color-mix(in srgb, var(--min-ink) 13%, transparent) 0%, transparent 64%),
+        color-mix(in srgb, var(--min-ink) 5%, transparent);
+    box-shadow: 0 12px 28px -16px rgb(0 0 0 / 62%);
+    transition: border-color 200ms ease, transform 130ms ease;
+}
+
+.min-btn--play[aria-pressed='true'] .min-play-ring {
+    border-color: color-mix(in srgb, var(--min-ink) 66%, transparent);
+}
+
+/* Play and pause are both in the DOM, stacked. Swapping the element meant the glyph blinked from one
+   shape to the other in a single frame; cross-fading two 26px icons costs nothing and reads as the
+   transport acknowledging the press. */
+.min-play-glyph {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+}
+
+.min-play-icon {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    opacity: 0;
+    transform: scale(0.72);
+    transition: opacity 170ms ease, transform 200ms cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+.min-play-icon[data-on] {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* The play triangle is optically light on the right; nudge it so it reads as centred. */
+.min-play-icon[data-slot='play'] {
+    transform: translateX(1.5px) scale(0.72);
+}
+
+.min-play-icon[data-slot='play'][data-on] {
+    transform: translateX(1.5px) scale(1);
+}
+
+/* Press feedback on the transport: a settled scale, no bounce. */
+.min-btn--play:active:not(:disabled) {
+    transform: scale(0.94);
+}
+
+.min-btn--play:active:not(:disabled) .min-play-ring {
+    transform: scale(0.97);
+}
+
+.min-btn:focus-visible,
+.min-icon:focus-visible,
+.min-dot:focus-visible {
+    outline: 2px solid var(--min-accent);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- page dots */
+
+.min-dots {
+    position: relative;
+    z-index: 3;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 24px;
+    margin-top: 2px;
+}
+
+/* The dots used to be the last row inside the WebView, so their bottom edge landed on the gesture
+   pill. .min now reserves the navigation inset; this row just needs its own breathing room. */
+
+/* Each dot follows the strip's position rather than a boolean: while the finger moves, the dot
+   nearest the centre grows and the other recedes, and a tap-to-page animates through the same
+   values. `--near` is written on the button itself once per gesture frame — two elements, not the
+   page — and the paint is a pseudo-element, so growing the dot costs a transform rather than a
+   layout pass on the row. */
+.min-dot {
+    --near: 0;
+    position: relative;
+    box-sizing: border-box;
+    /* A 4px dot is an unhittable target. The button is a 16px square and the painted dot sits inside
+       it; the negative margin keeps the row's own layout at 4px, exactly as when the button *was*
+       the dot. */
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin: -6px;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.min-dot::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 4px;
+    margin: -2px 0 0 -4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--min-ink) 88%, transparent);
+    /* Half to full width as the dot's page arrives (0 = leaving, 1 = arriving) — the same geometry
+       the old `width: calc(4px + 4px * --near)` produced, without re-running layout every frame. */
+    transform: scaleX(calc(0.5 + 0.5 * var(--near)));
+    opacity: calc(0.32 + 0.68 * var(--near));
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-height: 760px) and (min-height: 701px) {
+    /* The toolbar, two-line caption, lyric and transport need room before the 700px compact
+       preset takes over. Shrink the sleeve slightly here so it stays fully visible and the extra
+       space is distributed above the composition rather than between its lower rows. */
+    .min-cover__stage { width: min(100%, 35vh); }
+}
+
+@media (max-height: 700px) {
+    .min-cover { padding-top: 4px; padding-bottom: 2px; }
+    .min-cover__stage { width: min(100%, 31vh); margin-bottom: 12px; }
+    .min-cover__title { font-size: 20px; }
+    .min-cover__foot { margin-top: 6px; min-height: 22px; }
+    .min-live-lyric { height: max(48px, 3em); font-size: 17px; margin-top: 14px; }
+    .min-lyrics__thumb { width: 38px; height: 38px; }
+    .min-line { min-height: calc(40px * var(--min-lyric-scale, 1)); margin-bottom: calc(2px * var(--min-lyric-scale, 1)); }
+    .min-line__text { font-size: calc(15.5px * var(--min-lyric-scale, 1)); }
+    .min-line[data-active] .min-line__text { font-size: calc(23px * var(--min-lyric-scale, 1)); }
+}
+
+@media (min-height: 900px) {
+    .min-cover__stage { width: min(100%, 42vh); }
+    .min-cover__title { font-size: 29px; }
+    .min-live-lyric { margin-top: clamp(20px, 2.6vh, 24px); }
+    .min-line { min-height: calc(56px * var(--min-lyric-scale, 1)); }
+    .min-line__text { font-size: calc(21px * var(--min-lyric-scale, 1)); }
+    .min-line[data-active] .min-line__text { font-size: calc(31px * var(--min-lyric-scale, 1)); }
+}
+
+@media (orientation: landscape) {
+    .min-cover {
+        display: grid;
+        grid-template-columns: min(38%, 60vh) minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-content: center;
+        align-items: center;
+        column-gap: 30px;
+        padding: 4px 30px;
+    }
+    .min-cover__stage { grid-column: 1; grid-row: 1 / 3; width: 100%; margin: 0; }
+    .min-cover__meta-stack { grid-column: 2; grid-row: 1; width: 100%; max-width: none; }
+    .min-live-lyric { grid-column: 2; grid-row: 2; margin-top: 14px; }
+    .min-cover__foot { width: 100%; min-width: 210px; }
+    .min-lyrics__column { padding-top: 12px; }
+    .min-lyrics__head { padding-bottom: 2px; }
+}
+
+/* Keep the minimal page and its scroll position below a temporary stage visit. */
+.min[data-covered] { visibility: hidden; pointer-events: none; }
+.min[data-under-stage] { z-index: 62; }
+.min-cover__artist, .min-lyrics__artist { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; }
+.min-artist-link { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; min-height: 32px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.min-artist-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.min-artist-link svg { flex: none; }
+.min-artist-link:focus-visible { outline: 2px solid var(--min-accent); outline-offset: 3px; border-radius: 5px; }
+
+.min[data-under-stage] .min-cover__art, .min[data-under-stage] .min-wave i { animation-play-state: paused; }
+
+/* Definite geometry: percentage height on an auto-sized artwork could collapse in WebView. */
+.min-cover__art > .min-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.min[data-still] .min-cover__art-layer,
+.min[data-still] .min-cover__meta { animation-duration: 1ms; }
+.min-art__empty { z-index: 0; }
+.min-art__img { z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .min-art__img { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .min-live-lyric__text { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .min { transition: none; }
+    .min-cover__art-layer, .min-cover__meta { animation-duration: 1ms !important; }
+}
+
+.min-btn--play[aria-busy='true'] { opacity: .85; }
+.min-play-loading { position: absolute; inset: 0; margin: auto; }
+.min-transport[data-render-active] .min-play-loading { animation: min-loading-turn 900ms linear infinite; }
+@keyframes min-loading-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .min-transport[data-render-active] .min-play-loading { animation: none; } }

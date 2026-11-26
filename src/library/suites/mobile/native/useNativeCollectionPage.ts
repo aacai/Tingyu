@@ -1,0 +1,102 @@
+import { useEffect,useMemo,useState, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { LibraryCollectionSurfaceProps } from '../../../core/contracts/suite';
+import type { useMobileCollection } from '../useMobileCollection';
+import type { SongResult } from '../../../../types';
+import type { NativePageModel, PageActions, PageSection } from '../../../../types/nativePages';
+import { useNativePage } from '../../../../hooks/useNativePage';
+import { absolutePageImage } from '../../../../services/nativePages';
+import { getSongArtistLabel, getSongCoverUrl, getSongDurationMs } from '../../../../services/onlineMusic/songMetadata';
+import { formatTime } from '../../../../utils/appPlaybackHelpers';
+import { isLocalPlaybackSong } from '../../../../utils/appPlaybackGuards';
+import { omni } from '../../../../services/onlineMusic/omni';
+import { getPlaybackSongKey } from '../../../../utils/appPlaybackGuards';
+import { isSongUnavailable } from '../../../../services/onlineMusic/songAvailability';
+import { pageRowActions } from '../../../../utils/nativePageActions';
+import { usePlaybackStore, selectDisplaySong,selectDisplayPlayerState } from '../../../../stores/usePlaybackStore';
+import {PlayerState} from '../../../../types';
+import { NATIVE_FIRST } from '../../../../services/nativePages';
+import { useCollectionNavigationStore } from '../../../../stores/useCollectionNavigationStore';
+import { useAppViewStore } from '../../../../stores/useAppViewStore';
+import { useSettingsModalStore } from '../../../../stores/useSettingsModalStore';
+import { collectionKey } from '../../../core/model/collectionIdentity';
+import { catalogBadgePageFields } from '../../../../utils/catalogAudioLabels';
+import { useAudioSettingsStore } from '../../../../stores/useAudioSettingsStore';
+import { useLxSourceStore } from '../../../../stores/useLxSourceStore';
+
+// src/library/suites/mobile/native/useNativeCollectionPage.ts
+// The row offset has to outlive the page: leaving for the player unmounts this hook, and starting
+// again from 0 makes the re-mounted list request page 0 while it is still scrolled further down.
+const savedOffsets = new Map<string, number>();
+
+export function useNativeCollectionPage(root:RefObject<HTMLElement|null>,props:LibraryCollectionSurfaceProps,model:ReturnType<typeof useMobileCollection>,
+    name:string,count:number,onSongMenu:(song:SongResult,index:number)=>void,onCollectionMenu:()=>void,onSubscribe:()=>void) {
+    const {t}=useTranslation();const [filterOpen,setFilterOpen]=useState(false);
+    const cacheQuality=useAudioSettingsStore(state=>state.audioQuality),cacheRouteRevision=useLxSourceStore(state=>state.revision);
+    const collectionIdentity=collectionKey(props.collection);
+    const [offset,setOffsetState]=useState(()=>savedOffsets.get(collectionIdentity)??0);
+    const setOffset=(value:number)=>{savedOffsets.set(collectionIdentity,value);setOffsetState(value);};
+    const top=useCollectionNavigationStore(state=>state.snapshot?.stack.at(-1));
+    const browsing=useAppViewStore(state=>state.view!=='player');
+    const settings=useSettingsModalStore(state=>state.settingsModalState.isOpen);
+    const interactive=NATIVE_FIRST?browsing&&!settings&&!!top&&collectionKey(top)===collectionKey(props.collection):props.isInteractive;
+    const active=usePlaybackStore(selectDisplaySong),activeKey=active?getPlaybackSongKey(active):'';
+    const indexes=model.view.matchIndexes;
+    const total=indexes?.length??model.view.displayTracks.length;
+    const playing=usePlaybackStore(selectDisplayPlayerState)===PlayerState.PLAYING;
+    const originalActive=useMemo(()=>model.view.displayTracks.findIndex(song=>getPlaybackSongKey(song)===activeKey),[model.view.displayTracks,activeKey]);
+    const activeIndex=indexes?indexes.indexOf(originalActive):originalActive;
+    const [locateRevision,setLocateRevision]=useState(0),[pendingLocate,setPendingLocate]=useState('');
+    const locate=()=>{if(originalActive<0)return;if(activeIndex<0){setPendingLocate(activeKey);model.setQuery('');setFilterOpen(false)}
+        else {setOffset(Math.floor(activeIndex/100)*100);setLocateRevision(value=>value+1)}};
+    useEffect(()=>{if(pendingLocate&&pendingLocate===activeKey&&activeIndex>=0){setPendingLocate('');locate()}},[pendingLocate,activeKey,activeIndex]);
+    const actions:PageActions={back:props.onBack,menu:onCollectionMenu,playAll:model.actions.playScope,enqueueAll:model.actions.enqueueScope,
+        reload:model.actions.reload,resume:model.actions.resumeSync,subscribe:onSubscribe,locateCurrent:locate,
+        filterToggle:()=>setFilterOpen(true),filterClose:()=>setFilterOpen(false),filter:e=>{model.setQuery(e.text??'');setOffset(0)},range:e=>setOffset(Math.max(0,Math.floor((e.value??0)/100)*100))};
+    const items=useMemo(()=>Array.from({length:Math.max(0,Math.min(100,total-offset))},(_,local)=>{
+        const index=indexes?.[offset+local]??offset+local,song=model.view.displayTracks[index],key=getPlaybackSongKey(song);
+        // 统一详情契约（阶段 E）：所有非歌手集合的歌名都是原始名；序号由独立 number 字段承载，
+        // 由公共行组件决定展示 —— 不再把序号拼进歌名（旧专辑/每日推荐行为）。
+        return{id:`${index}:${key}`,title:song.name,number:String(index+1).padStart(2,'0'),duration:formatTime(getSongDurationMs(song)/1000),subtitle:getSongArtistLabel(song),image:absolutePageImage(getSongCoverUrl(song)),
+            ...catalogBadgePageFields(song,t,isLocalPlaybackSong(song)),
+            action:`play:${index}:${key}`,secondary:`menu:${index}:${key}`,secondaryLabel:t('mobileLibrary.trackActions',{name:song.name}),disabled:isSongUnavailable(song),selected:key===activeKey};
+    }),[model.view.displayTracks,indexes,total,offset,activeKey,t,cacheQuality,cacheRouteRevision]);
+    const controls: Array<{ id: string; title: string; action: string; disabled?: boolean }> = [];
+    if (total > 0) {
+        controls.push({ id: 'play', title: t('mobileLibrary.playAll'), action: 'playAll', disabled: !model.actions.capabilities.scope.enabled });
+    }
+    if(model.mutations.capabilities.subscribe.supported)controls.push({id:'subscribe',title:t(model.mutations.subscribed?'mobileLibrary.saved':'mobileLibrary.save'),action:'subscribe',disabled:!model.mutations.capabilities.subscribe.enabled});
+    const creator=model.snapshot?.detail?.creator??props.collection.creator;
+    // Discovery snapshots are generated on this device; they must not claim a platform name or
+    // expose that platform's playlist actions.
+    const source=props.collection.source==='online'?(props.collection.type==='discovery'?'听屿推荐':omni.getProviderLabel(props.collection.providerId)):t(props.collection.source==='local'?'search.sourceLocal':'search.sourceNavidrome');
+    // 统一详情契约：所有非歌手集合（歌单/专辑/每日推荐/本地文件夹…）都发 toolbar + intro +
+    // controls，由 Compose 侧同一 MediaDetailScaffold 渲染（NativePageView 按 page.id 路由，
+    // 不再按 intro/playlistIntro 分流标记）。歌手页走 useNativeArtistPage 独立适配器。
+    const sections:PageSection[]=[{id:'toolbar',layout:'chips' as const,items:[
+        {id:'back',title:t('mobileLibrary.back'),action:'back'},
+        ...(total > 0 ? [{id:'filterToggle',title:t('mobileLibrary.filter'),action:'filterToggle'}] : []),
+        {id:'menu',title:t('mobileLibrary.playlistActions'),action:'menu'},
+        ...(originalActive>=0?[{id:'locateCurrent',title:t('mobileLibrary.locateCurrent'),action:'locateCurrent'}]:[])]},
+        {id:'intro',layout:'rows' as const,description:model.snapshot?.detail?.description||props.collection.description,
+        creator:creator?.nickname||source,creatorImage:absolutePageImage(creator?.avatarUrl),items:[{id:'cover',title:name,subtitle:t('mobileLibrary.trackCount',{count}),
+        image:absolutePageImage(model.snapshot?.detail?.coverUrl||props.collection.coverUrl),action:total > 0 ? 'playAll' : ''}]},
+        {id:'controls',layout:'chips',items:controls.map(item=>({...item,selected:item.id==='subscribe'&&!!model.mutations.subscribed}))},
+        ...(props.collection.type==='playlist'&&total>0?[{id:'songHeading',layout:'message' as const,title:t('mobileLibrary.playlistSongs'),text:String(count)}]:[]),
+        // 筛选区只在展开/有词时下发：Compose 侧按 filterSection!=null 触发固定层展开，
+        // 常驻下发会让搜索层在进页时自动弹开（旧行为里专辑页是常驻内联输入框）。
+        ...(filterOpen||model.query?[{id:'filter',layout:'input' as const,value:model.query,placeholder:t('mobileLibrary.filter'),action:'filter',more:'filterClose',moreLabel:t('ui.cancel')}]:[]),
+        {id:'tracks',key:`${model.query}:${model.field}:${model.direction}`,layout:'rows',total,offset,request:'range',items,
+            activeKey,playing,activeIndex,locateRevision}];
+    if(!total && !(props.collection.type==='discovery' && props.collection.description)) {
+        sections.push({id:'empty',layout:'message',text:t(model.snapshot?.status==='loading'?'mobileLibrary.loading':'mobileLibrary.emptyCollection')});
+    }
+    if(model.snapshot?.error)sections.push({id:'error',layout:'message',text:model.snapshot.error.kind==='generic'?model.snapshot.error.message:t('mobileLibrary.loadFailed'),more:'reload',moreLabel:t('mobileLibrary.retry')});
+    if(model.snapshot?.sync.status==='interrupted')sections.push({id:'resume',layout:'message',more:'resume',moreLabel:t('mobileLibrary.resumeSync')});
+    const nativeModel:NativePageModel={key:`collection:${model.sessionKey}`,title:name,leading:'back',trailing:'menu',trailingLabel:'⋯',bottomClearance:100,sections};
+    return useNativePage(root,'collection',interactive,nativeModel,pageRowActions(actions,id=>{
+        const match=/^(play|menu):(\d+):(.*)$/.exec(id);if(!match)return;
+        const index=Number(match[2]),song=model.view.displayTracks[index];if(!song||getPlaybackSongKey(song)!==match[3])return;
+        return()=>match[1]==='play'?model.playTrack(song):onSongMenu(song,index);
+    }));
+}

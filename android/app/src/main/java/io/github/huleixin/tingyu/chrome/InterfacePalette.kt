@@ -1,0 +1,116 @@
+package io.github.huleixin.tingyu.chrome
+
+import androidx.compose.runtime.Stable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.toArgb
+
+// InterfacePalette.kt — generated facade; edit interfaceThemeSpec.json.
+// android/app/src/main/java/io/github/huleixin/tingyu/chrome/InterfacePalette.kt
+// 深色页面背景渐变收编（UI 统一工程）：原先以字面量散落在 NativePageView 等调用点，
+// 现在集中到这里，与 InterfacePalette/LightInterfaceColors 对应。数值 = 1.3.182 基线原值。
+// The dark branch returns the original literal unchanged, including its alpha.
+// Classic retains the historical values above; the registry now owns the former objects.
+@Stable internal data class InterfacePalette(val light: Boolean = false, val style: String = "classic", private val colorAt: ((Int) -> Color)? = null, private val gradientAt: ((Int) -> List<Color>)? = null) {
+    private val colors = InterfaceThemes.colors(style,light)
+    private val gradients = InterfaceThemes.gradients(style,light)
+    val ink get() = colorAt?.invoke(0) ?: colors[0]
+    val muted get() = colorAt?.invoke(1) ?: colors[1]
+    val accent get() = colorAt?.invoke(2) ?: colors[2]
+    val icon get() = colorAt?.invoke(3) ?: colors[3]
+    val surface get() = colorAt?.invoke(4) ?: colors[4]
+    val card get() = colorAt?.invoke(5) ?: colors[5]
+    val subtle get() = colorAt?.invoke(6) ?: colors[6]
+    val border get() = colorAt?.invoke(7) ?: colors[7]
+    val divider get() = colorAt?.invoke(8) ?: colors[8]
+    val selected get() = colorAt?.invoke(9) ?: colors[9]
+    val focus get() = colorAt?.invoke(10) ?: colors[10]
+    val selectedBorder get() = colorAt?.invoke(11) ?: colors[11]
+    val button get() = colorAt?.invoke(12) ?: colors[12]
+    val softButton get() = colorAt?.invoke(13) ?: colors[13]
+    val floating get() = colorAt?.invoke(14) ?: colors[14]
+    val sheet get() = colorAt?.invoke(15) ?: colors[15]
+    val pressTint get() = colorAt?.invoke(16) ?: colors[16]
+    val mediaAccent get() = colorAt?.invoke(17) ?: colors[17]
+    val mediaSubtle get() = colorAt?.invoke(18) ?: colors[18]
+    val mediaSelected get() = colorAt?.invoke(19) ?: colors[19]
+    val mediaDivider get() = colorAt?.invoke(20) ?: colors[20]
+    val directoryFade get() = colorAt?.invoke(21) ?: colors[21]
+    val directorySelected get() = colorAt?.invoke(22) ?: colors[22]
+    val homeQuickCard get() = colorAt?.invoke(23) ?: colors[23]
+    val homeQuickBorder get() = colorAt?.invoke(24) ?: colors[24]
+    val homeQuickSelected get() = colorAt?.invoke(25) ?: colors[25]
+    val homeDotActive get() = colorAt?.invoke(26) ?: colors[26]
+    val homeDotIdle get() = colorAt?.invoke(27) ?: colors[27]
+    val homeCard get() = colorAt?.invoke(28) ?: colors[28]
+    val homeBorder get() = colorAt?.invoke(29) ?: colors[29]
+    val inputBorder get() = colorAt?.invoke(30) ?: colors[30]
+    val chipBorder get() = colorAt?.invoke(31) ?: colors[31]
+    val headerSubtitle get() = colorAt?.invoke(32) ?: colors[32]
+    val selectionLabel get() = colorAt?.invoke(33) ?: colors[33]
+    val rearDivider get() = colorAt?.invoke(34) ?: colors[34]
+    val rearSelected get() = colorAt?.invoke(35) ?: colors[35]
+    val rearSelectedBorder get() = colorAt?.invoke(36) ?: colors[36]
+    val settingsAccent get() = colorAt?.invoke(37) ?: colors[37]
+    val settingsAccentSurface get() = colorAt?.invoke(38) ?: colors[38]
+    val switchThumb get() = colorAt?.invoke(39) ?: colors[39]
+    val switchTrack get() = colorAt?.invoke(40) ?: colors[40]
+    val searchSubtle get() = colorAt?.invoke(41) ?: colors[41]
+    val searchFocus get() = colorAt?.invoke(42) ?: colors[42]
+    val searchBorder get() = colorAt?.invoke(43) ?: colors[43]
+    val settingsGroup get() = colorAt?.invoke(44) ?: colors[44]
+    val settingsDivider get() = colorAt?.invoke(45) ?: colors[45]
+    val settingsInk get() = colorAt?.invoke(46) ?: colors[46]
+    val settingsIconSurface get() = colorAt?.invoke(47) ?: colors[47]
+    val settingsIcon get() = colorAt?.invoke(48) ?: colors[48]
+    val settingsMuted get() = colorAt?.invoke(49) ?: colors[49]
+    val settingsChevron get() = colorAt?.invoke(50) ?: colors[50]
+    val topInk get() = colorAt?.invoke(51) ?: colors[51]
+    val topMuted get() = colorAt?.invoke(52) ?: colors[52]
+    val topAccent get() = colorAt?.invoke(53) ?: colors[53]
+    val launch get() = colorAt?.invoke(54) ?: colors[54]
+    val onAccent get() = colorAt?.invoke(55) ?: colors[55]
+    val sleepTint get() = colorAt?.invoke(56) ?: colors[56]
+    val sleepArrow get() = colorAt?.invoke(57) ?: colors[57]
+    val sleepLine get() = colorAt?.invoke(58) ?: colors[58]
+    val sleepError get() = colorAt?.invoke(59) ?: colors[59]
+    val dropdownSurface get() = colorAt?.invoke(60) ?: colors[60]
+    val dropdownBorder get() = colorAt?.invoke(61) ?: colors[61]
+    val dropdownInk get() = colorAt?.invoke(62) ?: colors[62]
+    val panelSurface get() = colorAt?.invoke(63) ?: colors[63]
+    val panelCard get() = colorAt?.invoke(64) ?: colors[64]
+    val panelInk get() = colorAt?.invoke(65) ?: colors[65]
+    val panelMuted get() = colorAt?.invoke(66) ?: colors[66]
+    val panelAccent get() = colorAt?.invoke(67) ?: colors[67]
+    val panelLine get() = colorAt?.invoke(68) ?: colors[68]
+    val panelDanger get() = colorAt?.invoke(69) ?: colors[69]
+    val glassSurface get() = colorAt?.invoke(70) ?: colors[70]
+    val glassCrispSurface get() = colorAt?.invoke(71) ?: colors[71]
+    val glassFallback get() = colorAt?.invoke(72) ?: colors[72]
+    val glassReflection get() = colorAt?.invoke(73) ?: colors[73]
+    val switchKnob get() = colorAt?.invoke(74) ?: colors[74]
+    val fallbackInk get() = colorAt?.invoke(75) ?: colors[75]
+    val fallbackMuted get() = colorAt?.invoke(76) ?: colors[76]
+    val fallbackAccent get() = colorAt?.invoke(77) ?: colors[77]
+    val disabled get() = colorAt?.invoke(78) ?: colors[78]
+    val scrim get() = colorAt?.invoke(79) ?: colors[79]
+    val launchInk get() = colorAt?.invoke(80) ?: colors[80]
+    val toggleKnob get() = colorAt?.invoke(81) ?: colors[81]
+    val menuSurface get() = colorAt?.invoke(82) ?: colors[82]
+    val menuInk get() = colorAt?.invoke(83) ?: colors[83]
+    val menuMuted get() = colorAt?.invoke(84) ?: colors[84]
+    val queueHighlight get() = colorAt?.invoke(85) ?: colors[85]
+    val toolDanger get() = colorAt?.invoke(86) ?: colors[86]
+    val nowPlayingAccent get() = colorAt?.invoke(87) ?: colors[87]
+    val opticalShadow get() = colorAt?.invoke(88) ?: colors[88]
+    val backgrounds get() = gradientAt?.invoke(0) ?: gradients[0]
+    val settingsBackgrounds get() = gradientAt?.invoke(1) ?: gradients[1]
+    val searchBackgrounds get() = gradientAt?.invoke(2) ?: gradients[2]
+    val homeBackgrounds get() = gradientAt?.invoke(3) ?: gradients[3]
+    val fallbackBackgrounds get() = gradientAt?.invoke(4) ?: gradients[4]
+    fun snapshotColors() = colors.indices.map { colorAt?.invoke(it) ?: colors[it] }
+    fun snapshotGradients() = gradients.indices.map { gradientAt?.invoke(it) ?: gradients[it] }
+}
+internal val LocalInterfacePalette = staticCompositionLocalOf { InterfacePalette() }
+internal fun ChromeSurface.interfacePaint(palette: InterfacePalette): ChromeSurface =
+    if(id == "stage" || (!palette.light && InterfaceThemes.resolve(palette.style) == "classic" && !light)) this else copy(light=palette.light, ink=if(!palette.light && InterfaceThemes.resolve(palette.style) == "classic") ink else String.format("#%06x",palette.ink.toArgb() and 0xffffff), accent=if(!palette.light && InterfaceThemes.resolve(palette.style) == "classic") accent else String.format("#%06x",palette.accent.toArgb() and 0xffffff))

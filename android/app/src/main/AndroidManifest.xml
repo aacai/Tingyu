@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- 明确声明支持大屏与任意密度，减少厂商兼容模式把 App 塞进固定比例窗口的概率。 -->
+    <supports-screens
+        android:anyDensity="true"
+        android:largeScreens="true"
+        android:normalScreens="true"
+        android:resizeable="true"
+        android:smallScreens="true"
+        android:xlargeScreens="true" />
+
+    <queries><package android:name="com.xiaomi.subscreencenter" /></queries>
+    <application
+        android:name=".TingyuApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="${tingyuAppLabel}"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/AppTheme">
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription" android:value="听屿背屏系统协调 / Tingyu rear-display bridge" />
+        <meta-data android:name="xposedminversion" android:value="82" />
+        <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
+        <!-- 极早期诊断：ContentProvider 先于 Application.onCreate 创建，initOrder 取高值确保
+             它排在其他 provider 之前。只装崩溃处理器/事件流/启动记账，不做业务初始化。 -->
+        <provider
+            android:name=".diagnostics.DiagnosticBootstrapProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:initOrder="1000" />
+        <provider android:name=".LspRearProvider" android:authorities="${applicationId}.lsp"
+            android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+        <!-- 背屏中心是另一个应用（系统应用）：Android 11+ 的包可见性会拦 content provider
+             调用。forceQueryable 让宿主 register 不被可见性挡住，真正的门仍是 Provider 内的
+             UID 校验（只接受 com.xiaomi.subscreencenter）。 -->
+        <provider android:name=".RearHostProvider" android:authorities="${applicationId}.rearhost"
+            android:exported="true" android:forceQueryable="true" android:grantUriPermissions="false" />
+        <!-- HyperOS opt-in for activities launched on the Xiaomi rear display. -->
+        <meta-data android:name="miui.rear.policy" android:value="1" />
+        <!-- ColorOS 原生锁屏歌词：声明本应用愿意进 OPlus 的媒体历史 / 媒体管线。 -->
+        <meta-data
+            android:name="io.github.andrealtb.lockscreenlyrics.OPLUS_MEDIA_HISTORY"
+            android:value="true" />
+        <provider android:name=".playback.SharedArtworkProvider" android:authorities="${applicationId}.artwork" android:exported="false" />
+        <service android:name=".playback.AudioCacheJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />
+        <service android:name=".playback.ResourceCacheJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
+        <service
+            android:name=".FoliaPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <receiver
+            android:name=".PlaybackActionReceiver"
+            android:exported="false" />
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="${tingyuAppLabel}"
+            android:theme="@style/AppTheme.NoActionBarLaunch.System"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- 安全恢复页：不依赖 React / WebView / Media3 / 歌词 / LSP，只在启动守卫判定失败时进入。 -->
+        <activity
+            android:name=".SafeModeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:label="${tingyuAppLabel}"
+            android:theme="@style/AppTheme.NoActionBar" />
+        <activity
+            android:name=".RearLyricsActivity"
+            android:exported="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="${applicationId}.rear_lyrics"
+            android:resizeableActivity="true"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">
+            <meta-data android:name="miui.rear.policy" android:value="1" />
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    <receiver android:name=".playback.SleepTimerReceiver" android:exported="false" />
+    </application>
+
+    <!-- Permissions -->
+    <permission android:name="${applicationId}.permission.LSP_CONNECT" android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.permission.LSP_CONNECT" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- 可选的「所有文件访问」：只在系统媒体库漏收了本地音频（个别 ROM、恢复出厂后未重建索引）
+         或用户想读同目录 .lrc 外挂歌词时，由用户在系统设置里手动打开。App 不主动索要，
+         也没有它全部核心功能照常可用（媒体库扫描 + 文件夹导入两条路都不依赖它）。 -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- 仅 Android 9 及以下保存赞赏码到相册时按需申请；Android 10+ 走 MediaStore 无需权限。 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 把<b>自己的</b>背屏歌词任务重新置顶（ActivityManager.moveTaskToFront）。normal 级，安装即授予；
+         1.3.62 起是「被系统背屏桌面覆盖」时的首选恢复机制。 -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+</manifest>

@@ -1,0 +1,324 @@
+/* src/components/app/overlays/mobile-stage/mobileStageChrome.css — no lyric renderer selectors. */
+.mobile-player-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 65;
+    pointer-events: none;
+    /* The shared progress widget translates a full-width invisible thumb carrier.
+       Bound its overdraw to this viewport overlay without changing its clock or touch target. */
+    overflow: clip;
+    color: var(--mps-ink);
+    font-family: system-ui, -apple-system, 'Microsoft YaHei', sans-serif;
+    transition: opacity 200ms ease;
+}
+.mobile-player-stage[data-hidden='true'] {
+    opacity: 0;
+    visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+    .mobile-player-stage[data-arriving='true'] {
+        animation: none;
+    }
+}
+.mobile-player-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: calc(135px + var(--folia-main-inset-top, env(safe-area-inset-top, 0px)));
+    background: linear-gradient(180deg, #00000024, transparent);
+    pointer-events: none;
+}
+.mobile-player-stage button {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: transform 160ms ease, background-color 160ms ease;
+}
+.mobile-player-stage button:active:not(:disabled) {
+    transform: scale(0.94);
+}
+.mobile-player-stage button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.mobile-player-stage :focus-visible {
+    outline: 2px solid var(--mps-accent);
+    outline-offset: 2px;
+}
+.mps-header {
+    position: absolute;
+    /* The same safe-area source the minimal page uses. env() reports zero in this app — the
+       SystemBars plugin's automatic padding is switched off — so the header used to sit at a flat
+       10px and rely on the platform drawing the status bar over an already-inset WebView. On a long
+       Xiaomi screen with the clock at 40px that put the sleeve and the collapse arrow inside the
+       status bar. --folia-main-inset-top is measured natively (MainSystemBars). */
+    top: max(10px, var(--folia-main-inset-top, env(safe-area-inset-top, 0px)));
+    /* The arrow's own 44px box supplies the left gutter: with 8px here its glyph lands at ~19px,
+       which is where the minimal page's chevron sits. It used to be 20px because the arrow had no
+       box of its own — it was drawn inside the artwork. */
+    left: max(8px, var(--folia-main-inset-left, env(safe-area-inset-left, 0px)));
+    right: max(12px, var(--folia-main-inset-right, env(safe-area-inset-right, 0px)));
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    pointer-events: auto;
+    min-height: 60px;
+    padding: 5px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    text-shadow: 0 1px 7px #0007;
+}
+.mps-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0;
+    border-radius: 50%;
+}
+/* The collapse control, on its own. 44dp wide is the minimum a thumb target should be and the same
+   box the minimal page's top-left chevron uses; the height stays 48 so it matches the row. */
+.mps-collapse {
+    width: 44px;
+    min-width: 44px;
+    height: 48px;
+    min-height: 48px;
+}
+.mps-like[aria-pressed='true'] {
+    color: #ff7182;
+    background: color-mix(in srgb, #ff7182 14%, transparent);
+}
+.mps-art {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 9px;
+    overflow: hidden;
+    background: var(--mps-track);
+    display: grid;
+    place-items: center;
+    flex: none;
+}
+.mps-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.mps-song {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.mps-song strong {
+    font-size: 17px;
+    line-height: 1.4;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mps-song span {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--mps-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mps-player {
+    position: absolute;
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    left: 16px;
+    right: 16px;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 14px 18px 12px;
+    border: 1px solid #ffffff22;
+    border-radius: 30px;
+    background: linear-gradient(150deg, #ffffff0e, transparent 55%), var(--mps-glass);
+    backdrop-filter: blur(18px) saturate(0.95);
+    -webkit-backdrop-filter: blur(18px) saturate(0.95);
+    box-shadow: inset 0 1px 0 #ffffff20, 0 8px 24px #0003;
+    pointer-events: auto;
+}
+.mps-transport {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3px;
+}
+.mps-main-transport {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+.mobile-player-stage .mps-toggle {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--mps-track);
+    display: grid;
+    place-items: center;
+}
+.mps-secondary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 48px;
+    min-height: 50px;
+    padding: 0;
+}
+.mps-secondary span {
+    font-size: 10px;
+    opacity: 0.8;
+}
+.mps-secondary[aria-pressed='true'] {
+    /* 激活态薄荷绿（第 20 轮）：图标包 control_play 示例色，浅背景自动加深。 */
+    color: var(--mps-mint, #6dbdad);
+}
+.mps-progress {
+    margin-top: 9px;
+}
+.mps-progress [data-folium-part='progress.root'] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+}
+.mps-progress [data-folium-part='progress.track'] {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 10px 0 12px;
+    height: 4px;
+    border-radius: 10px;
+}
+.mps-progress input[type='range'] {
+    top: -20px;
+    height: 44px;
+}
+.mps-progress [data-folium-part='progress.thumb'] {
+    opacity: 1;
+    width: 15px;
+    height: 15px;
+    box-shadow: 0 1px 3px #0002;
+}
+.mps-progress [data-folium-part='progress.time'],
+.mps-progress [data-folium-part='progress.duration'] {
+    width: auto;
+    font: 11px/16px system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+    text-align: left;
+}
+.mps-progress [data-folium-part='progress.duration'] {
+    text-align: right;
+}
+@media (max-width: 350px) {
+    .mps-header {
+        gap: 2px;
+        left: 5px;
+        right: 5px;
+    }
+    .mps-header .mps-icon {
+        min-width: 48px;
+        min-height: 48px;
+    }
+    .mps-art {
+        width: 34px;
+        height: 34px;
+    }
+    .mps-song strong {
+        font-size: 13px;
+    }
+    .mps-player {
+        padding-inline: 12px;
+    }
+    .mps-main-transport {
+        gap: 4px;
+    }
+}
+@media (max-height: 500px) {
+    .mps-header {
+        min-height: 48px;
+        padding-block: 0;
+        top: max(6px, var(--folia-main-inset-top, env(safe-area-inset-top, 0px)));
+    }
+    .mps-art {
+        width: 36px;
+        height: 36px;
+    }
+    .mps-player {
+        max-width: 430px;
+        padding: 6px 18px 7px;
+        bottom: max(6px, var(--folia-main-inset-bottom, env(safe-area-inset-bottom, 0px)));
+        border-radius: 24px;
+    }
+    .mps-progress {
+        margin-top: 0;
+    }
+    .mobile-player-stage .mps-toggle {
+        width: 44px;
+        height: 44px;
+    }
+    .mps-secondary {
+        min-height: 44px;
+    }
+    .mps-progress [data-folium-part='progress.track'] {
+        margin: 5px 0 8px;
+    }
+}
+
+/* The sleeve is information now, not a control: no chevron on top of it, no press state, and no
+   8px margin reserved for a button that no longer wraps it. */
+/* Stage chrome intentionally does not share the home optical lens treatment. */
+.mps-header > .mps-icon svg { stroke-width: 1.8; filter: drop-shadow(0 1px 3px #0005); }
+
+.mobile-player-stage .mps-icon {
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease, color 180ms ease;
+}
+
+.mobile-player-stage .mps-toggle {
+    background: #ffffff22;
+    box-shadow: inset 0 1px 0 #ffffff30, inset 0 0 0 1px #ffffff14;
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.mobile-player-stage .mps-toggle:active:not(:disabled) {
+    box-shadow: inset 0 1px 0 #ffffff25, 0 2px 6px #0002;
+}
+
+@media (hover: hover) {
+    .mobile-player-stage .mps-icon:hover:not(:disabled) {
+        background: #ffffff12;
+    }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+    .mobile-player-stage .mps-player {
+        background: var(--mps-glass);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mobile-player-stage,
+    .mobile-player-stage * {
+        transition: none !important;
+    }
+}

@@ -1,0 +1,87 @@
+import {useSleepTimerStore} from '../../../stores/useSleepTimerStore';
+import React, { Suspense } from 'react';
+import { createPreloadableComponent } from '../../../services/startupPreload';
+const SleepTimerSheet=createPreloadableComponent(()=>import('../../modal/SleepTimerSheet')).Component;
+import { createPortal } from 'react-dom';
+import { AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+const LyricMatchModal = createPreloadableComponent(() => import('../../modal/LyricMatchModal')).Component;
+const NaviLyricMatchModal = createPreloadableComponent(() => import('../../modal/NaviLyricMatchModal')).Component;
+const OnlineLyricMatchModal = createPreloadableComponent(() => import('../../modal/OnlineLyricMatchModal')).Component;
+const UnavailableReplacementDialog = createPreloadableComponent(() => import('../../modal/UnavailableReplacementDialog')).Component;
+import SettingsDialogHost from './SettingsDialogHost';
+import ConfirmDialog from '../../shared/ConfirmDialog';
+import type { AppDialogsModel } from './buildAppDialogsModel';
+import { countRender } from '../../../dev/renderCount';
+import SettingsPresence from '../../modal/settings/SettingsPresence';
+
+// Centralized app-level dialog and toast renderer for the player shell.
+type AppDialogsProps = {
+    model: AppDialogsModel;
+};
+
+const AppDialogs: React.FC<AppDialogsProps> = ({ model }) => {
+    countRender('AppDialogs');
+    const sleepOpen=useSleepTimerStore(state=>state.sleepTimerSheetOpen);
+    const { statusToast, lyricMatchDialog, naviLyricMatchDialog, onlineLyricMatchDialog, unavailableReplacementDialog, settingsDialog, wallpaperEntryConfirmDialog } = model;
+
+    return (
+        <>
+            <AnimatePresence>{sleepOpen&&<Suspense key="sleep" fallback={null}><SleepTimerSheet/></Suspense>}</AnimatePresence>
+            {createPortal(
+                <AnimatePresence>
+                    {statusToast && (
+                        <motion.div
+                            key={statusToast.toastKey}
+                            data-folia-status-toast="true"
+                            initial={{ opacity: 0, y: -20, x: '-50%' }}
+                            animate={{ opacity: 1, y: 30, x: '-50%' }}
+                            exit={{ opacity: 0, y: -20, x: '-50%' }}
+                            className={`fixed top-0 left-1/2 z-[210] px-6 py-3 backdrop-blur-md rounded-full font-medium text-sm shadow-xl flex items-center gap-3 ${statusToast.onAction || statusToast.onCancel ? 'pointer-events-auto' : 'pointer-events-none'} ${statusToast.isDaylight ? 'bg-white/70 text-zinc-800 border border-black/5' : 'bg-white/10 text-white'}`}
+                        >
+                            {statusToast.type === 'error'
+                                ? <AlertCircle size={18} className={statusToast.isDaylight ? 'text-red-500' : 'text-red-400'} />
+                                : statusToast.type === 'success'
+                                    ? <CheckCircle2 size={18} className={statusToast.isDaylight ? 'text-green-600' : 'text-green-400'} />
+                                    : <Sparkles size={18} className={statusToast.isDaylight ? 'text-blue-600' : 'text-blue-400'} />}
+                            <span>{statusToast.text}</span>
+                            {statusToast.onCancel && statusToast.cancelLabel && (
+                                <button
+                                    type="button"
+                                    onClick={statusToast.onCancel}
+                                    className={`px-2.5 py-1 rounded-full text-xs transition-colors ${statusToast.isDaylight ? 'text-zinc-500 hover:bg-black/5 hover:text-zinc-800' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                                >
+                                    {statusToast.cancelLabel}
+                                </button>
+                            )}
+                            {statusToast.onAction && statusToast.actionLabel && (
+                                <button
+                                    type="button"
+                                    onClick={statusToast.onAction}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${statusToast.isDaylight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-white text-zinc-950 hover:bg-white/85'}`}
+                                >
+                                    {statusToast.actionIcon && <statusToast.actionIcon size={14} className={statusToast.isDaylight ? 'text-amber-300' : 'text-amber-500'} />}
+                                    {statusToast.actionLabel}
+                                </button>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body,
+            )}
+
+            <AnimatePresence>
+            {lyricMatchDialog && <Suspense key="lyric-local" fallback={null}><LyricMatchModal {...lyricMatchDialog} /></Suspense>}
+            {naviLyricMatchDialog && <Suspense key="lyric-navi" fallback={null}><NaviLyricMatchModal {...naviLyricMatchDialog} /></Suspense>}
+            {onlineLyricMatchDialog && <Suspense key="lyric-online" fallback={null}><OnlineLyricMatchModal {...onlineLyricMatchDialog} /></Suspense>}
+            {unavailableReplacementDialog && <Suspense key="replacement" fallback={null}><UnavailableReplacementDialog {...unavailableReplacementDialog} presenceOwner="parent" /></Suspense>}
+            {wallpaperEntryConfirmDialog && <ConfirmDialog key="wallpaper-confirm" {...wallpaperEntryConfirmDialog} presenceOwner="parent" />}
+            </AnimatePresence>
+            <Suspense fallback={null}><SettingsPresence>
+                {settingsDialog && <SettingsDialogHost {...settingsDialog} />}
+            </SettingsPresence></Suspense>
+        </>
+    );
+};
+
+export default React.memo(AppDialogs);

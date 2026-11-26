@@ -1,0 +1,138 @@
+import { navigationMark } from './navigationTiming';
+import type { NativeSettingsDocument,SettingsRect,SettingsPaint,SettingsControl,SettingsScrollArea } from '../types/nativeSettingsDocument';
+import type { PageActions } from '../types/nativePages';
+import { absolutePageImage } from './nativePages';
+import { settingsTextRuns } from './nativeSettingsText';
+import { bindSettingsControl } from './nativeSettingsActions';
+import { normalizeSettingsColors } from './nativeSettingsColor';
+import { settingsDiagnostic } from './settingsDiagnostics';
+
+// src/services/nativeSettingsDocument.ts
+// A measured display list preserves the existing settings design; Compose owns painting,
+// scrolling, IME and native controls. No screenshot/HTML bitmap of the page is used.
+const ids=new WeakMap<Element,string>();let next=0;
+const idFor=(node:Element)=>{let id=ids.get(node);if(!id){id=`setting:${++next}`;ids.set(node,id)}return id};
+const n=(value:string)=>parseFloat(value)||0;
+const painted=(color:string)=>color&&color!=='transparent'&&!/^rgba\([^)]*,\s*0\s*\)$/.test(color);
+export function captureSettingsDocument(root:HTMLElement){
+    const startedAt=performance.timeOrigin+performance.now();
+    const styles=new WeakMap<Element,CSSStyleDeclaration>();
+    const computedStyle=(node:Element)=>{let style=styles.get(node);if(!style){style=getComputedStyle(node);styles.set(node,style)}return style};
+    const base=root.getBoundingClientRect(),paints:SettingsPaint[]=[],controls:SettingsControl[]=[],areas:SettingsScrollArea[]=[],live:SettingsRect[]=[],actions:PageActions={};
+    const rect=(box:DOMRect,area?:SettingsScrollArea):SettingsRect=>({x:box.left-base.left,y:box.top-base.top+(area?.offset??0),w:box.width,h:box.height});
+    const visit=(element:Element,area?:SettingsScrollArea,opacity=1,clip?:SettingsRect)=>{
+        if(!(element instanceof HTMLElement||element instanceof SVGElement)||element.matches('script,style,[hidden],input[type="hidden"]'))return;
+        const style=computedStyle(element);if(style.display==='none')return;
+        const box=rect(element.getBoundingClientRect(),area);if(!box.w||!box.h)return;
+        // Visibility is deliberately hidden in the layout source, not in native output.
+        const alpha=opacity*(element===root?1:Number(style.opacity));if(alpha<=0)return;
+        const common={...box,area:area?.id,opacity:alpha,clip};
+        if(element.matches('[data-native-live="true"]')){
+            // Keep the original background chain behind a transparent live preview.
+            // All other descendants remain individually hidden by the native document CSS.
+            let carrier=element.parentElement;while(carrier){carrier.dataset.nativeLiveCarrier='true';if(carrier===root)break;carrier=carrier.parentElement;}
+            live.push(rect(element.getBoundingClientRect()));paints.push({...common,kind:'live',radius:n(style.borderTopLeftRadius)});return;
+        }
+        const edges=[{width:n(style.borderTopWidth),color:style.borderTopColor},{width:n(style.borderRightWidth),color:style.borderRightColor},
+            {width:n(style.borderBottomWidth),color:style.borderBottomColor},{width:n(style.borderLeftWidth),color:style.borderLeftColor}];
+        if(painted(style.backgroundColor)||edges.some(edge=>edge.width>0)||style.backgroundImage.includes('gradient')){
+            paints.push({...common,kind:'box',background:style.backgroundColor,gradient:style.backgroundImage,border:style.borderTopColor,borderWidth:n(style.borderTopWidth),radius:n(style.borderTopLeftRadius),edges});
+        }
+        if(element instanceof SVGSVGElement){
+            // Resolve CSS/inherited colours before leaving the browser. Geometry stays vector,
+            // including the illustration's own viewBox (it is not necessarily a 24px icon).
+            const copy=element.cloneNode(true) as SVGSVGElement;
+            const targets=[copy,...copy.querySelectorAll('*')];
+            [element,...element.querySelectorAll('*')].forEach((source,index)=>{
+                const target=targets[index],computed=computedStyle(source);
+                for(const name of ['fill','stroke','stroke-width','stroke-linecap','stroke-linejoin','fill-opacity','stroke-opacity','fill-rule']){
+                    const value=computed.getPropertyValue(name);target.setAttribute(name,value==='currentcolor'?computed.color:value);
+                }
+                target.setAttribute('opacity',index===0?'1':computed.opacity);
+            });
+            paints.push({...common,kind:'svg',svg:new XMLSerializer().serializeToString(copy),color:style.color});return;
+        }
+        if(element instanceof HTMLImageElement){
+            paints.push({...common,kind:'image',image:absolutePageImage(element.currentSrc||element.src),radius:n(style.borderTopLeftRadius)});return;
+        }
+        // 装饰层（全屏遮罩、纯视觉按钮外框）永不注册成原生控件。无 area 的控件在 Compose 里
+        // 与 Controls(null) 一起最后合成，永远盖在面板内容之上 —— 一个全屏遮罩按钮会把面板里
+        // 的每一次点击都变成「点遮罩」（反馈面板点哪都返回上一页，就是这么来的）。
+        // 两条独立的判定：data-native-decoration 覆盖整个子树；aria-hidden 只针对元素自身，
+        // 语义上本就不该成为可交互控件，也给「新弹窗忘了打标记」留一道结构性兜底。
+        const decoration=element.closest('[data-native-decoration]')||element.getAttribute('aria-hidden')==='true';
+        const input=!decoration&&(element instanceof HTMLInputElement||element instanceof HTMLTextAreaElement||element instanceof HTMLSelectElement);
+        const clickable=!decoration&&(element.matches('button,a[href],summary,[role="button"],[role="tab"],[role="option"],[role="switch"],[role="checkbox"]')
+            ||element instanceof HTMLLabelElement&&element.control?.matches('input[type="file"],input[type="checkbox"],input[type="radio"]'));
+        const ruler=!decoration&&element.matches('[data-native-ruler]');
+        const pad=!decoration&&element.matches('.react-colorful__interactive');
+        if(input||clickable||ruler||pad){
+            const node=element as HTMLInputElement;const type=node.type;
+            // 原生 select（68597）：CustomSelect 这类自定义下拉会在 DOM 里弹 portal 菜单，
+            // 文档页把它当 portal 拍成静态画 —— 拍在淡入中途就是"浅底浅字 + 半透明"。
+            // 标记过 data-native-select 的触发按钮改报成 select 控件，由 Compose 画菜单。
+            const nativeSelectEl=!input?element.closest<HTMLElement>('[data-native-select]'):null;
+            const nativeOptions=(()=>{
+                const raw=nativeSelectEl?.getAttribute('data-native-options');if(!raw)return undefined;
+                try{const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed.map(item=>({value:String(item.value),label:String(item.label)})):undefined}catch{return undefined}
+            })();
+            const kind:SettingsControl['kind']=nativeSelectEl?'select':pad?'pad':ruler?'ruler':!input||type==='checkbox'||type==='radio'||type==='file'||type==='color'?'click':element instanceof HTMLSelectElement?'select':type==='range'?'range':'text';
+            const control:SettingsControl={...box,id:idFor(element),kind,area:area?.id,disabled:element.matches(':disabled,[aria-disabled="true"]'),
+                label:element.getAttribute('aria-label')||element.textContent?.trim()||element.getAttribute('placeholder')||'',value:nativeSelectEl?(nativeSelectEl.getAttribute('data-native-value')??''):ruler?element.getAttribute('aria-valuenow')??'0':type==='checkbox'||type==='radio'?(node.checked?'1':''):input?node.value:undefined,
+                min:ruler?n(element.getAttribute('aria-valuemin')??'0'):n(node.min),max:ruler?n(element.getAttribute('aria-valuemax')??'100'):node.max?n(node.max):100,step:node.step==='any'?0:node.step?n(node.step):1,inputType:type,font:n(style.fontSize),color:style.color,
+                multiline:element instanceof HTMLTextAreaElement,placeholder:element.getAttribute('placeholder')??'',accent:style.accentColor,rangeFill:style.appearance!=='none',
+                padding:[n(style.paddingLeft),n(style.paddingTop),n(style.paddingRight),n(style.paddingBottom)],
+                options:nativeOptions??(element instanceof HTMLSelectElement?[...element.options].map(option=>({value:option.value,label:option.text})):undefined)};
+            controls.push(control);bindSettingsControl(element as HTMLElement,control,actions);
+            if(kind==='text'||kind==='range'||kind==='select')return;
+        }
+        let childArea=area;
+        if(element instanceof HTMLElement&&/(auto|scroll)/.test(style.overflowY)&&element.scrollHeight>element.clientHeight+2){
+            // Independent scroll panes (including third-level dialogs) retain their own offsets.
+            const id=idFor(element),viewport=rect(element.getBoundingClientRect());
+            childArea={...viewport,id,contentHeight:element.scrollHeight,offset:element.scrollTop};areas.push(childArea);
+            actions[`scroll:${id}`]=event=>{element.scrollTop=Math.max(0,event.value??0);if(event.text!=='live')element.dispatchEvent(new Event('tingyu-native-form-scroll',{bubbles:true}))};
+        }
+        let childClip=childArea!==area?undefined:clip;
+        if(childArea===area&&/(hidden|clip)/.test(style.overflow))childClip=box;
+        // Closed details retain descendant geometry in Chromium, but only their first
+        // summary is painted. Exporting the hidden body overlaps the controls below it.
+        const summary=element instanceof HTMLDetailsElement&&!element.open?element.querySelector(':scope > summary'):null;
+        const children=element instanceof HTMLDetailsElement&&!element.open?(summary?[summary]:[]):[...element.childNodes];
+        // Positioned menus paint after normal siblings, like the original browser stacking order.
+        children.sort((a,b)=>{const z=(node:Node)=>node instanceof Element?Number(computedStyle(node).zIndex)||0:0;return z(a)-z(b)});
+        for(const child of children){
+            if(child instanceof Text){
+                const window=childArea&&childArea.contentHeight>4000?{top:childArea.y+childArea.offset-childArea.h*2,bottom:childArea.y+childArea.offset+childArea.h*3}:undefined;
+                for(const run of settingsTextRuns(child,style,value=>rect(value,childArea),window))paints.push({...run,area:childArea?.id,opacity:alpha,clip:childClip});
+            }
+            else if(child instanceof Element)visit(child,childArea,alpha,childClip);
+        }
+    };
+    // A third-level full-screen editor replaces the section underneath. Do not leave
+    // its text fields interactive above the new editor or run two sets of form controls.
+    const editors=[...root.querySelectorAll<HTMLElement>('.fixed,[role="dialog"]')].filter(node=>{
+        const style=computedStyle(node),box=node.getBoundingClientRect();
+        return style.display!=='none'&&style.position==='fixed'&&box.width>=base.width*.7&&box.height>=base.height*.5;
+    }).sort((a,b)=>(Number(computedStyle(a).zIndex)||0)-(Number(computedStyle(b).zIndex)||0));
+    const portalSelector='[data-folia-keyboard-window="true"],[role="listbox"],[role="dialog"]';
+    const portals=[...document.querySelectorAll<HTMLElement>(portalSelector)]
+        .filter(node=>node!==root&&!root.contains(node)&&!node.closest('[data-native-document-root]')&&!node.parentElement?.closest(portalSelector));
+    const modal=[...editors,...portals].filter(node=>node.matches('[aria-modal="true"],[role="dialog"]') && computedStyle(node).display!=='none')
+        .sort((a,b)=>(Number(computedStyle(a).zIndex)||0)-(Number(computedStyle(b).zIndex)||0)).at(-1);
+    // Native editors paint above Canvas. Exclude background editors and scroll panes
+    // rather than relying on a modal's background colour to occlude native controls.
+    visit(modal??editors.at(-1)??root);
+    // CustomSelect and confirmation dialogs use React portals. They belong to the same native document.
+    for(const portal of portals){
+        portal.dataset.nativeSettingsPortal='true';portal.dataset.nativePage='true';
+        if(portal!==modal&&(!modal||modal.contains(portal)))visit(portal);
+    }
+    actions.liveTap=event=>{try{const {x,y}=JSON.parse(event.text??'{}');const target=document.elementFromPoint(x+base.left,y+base.top);
+        const button=target?.closest<HTMLElement>('button,a,[role="button"]');
+        if(button&&button.closest('[data-native-live]'))button.click();}catch{/* Ignore stale/invalid pointer coordinates. */}};
+    const documentModel=normalizeSettingsColors({paints,controls,areas,live} satisfies NativeSettingsDocument);
+    navigationMark('settings-capture',startedAt);
+    settingsDiagnostic('capture',{durationMs:performance.timeOrigin+performance.now()-startedAt,paints:paints.length,controls:controls.length,areas:areas.length,live:live.length});
+    return {document:documentModel,actions};
+}

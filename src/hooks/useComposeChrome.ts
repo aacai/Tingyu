@@ -1,0 +1,172 @@
+import { noteUiInteraction, markStartupReady } from '../services/uiWarmup';
+import { navigationMark } from '../services/navigationTiming';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import type { MotionValue } from 'framer-motion';
+import { COMPOSE_CHROME_FAILURE_EVENT, PREHIDE_COMPOSE_CHROME, canUseComposeChrome, newChromeGeneration, chromeNative, chromeClockNeedsAnchor, chromeWindowInteraction, hasBlockingChromeWindow, type ChromeSurfaceId, type ChromeData } from '../services/nativeChrome';
+import { isMainStageActive, subscribeMainStageActivity } from '../utils/stageActivity';
+import { useStableNativeData } from './useStableNativeData';
+import { sameNativeEnvelope } from '../utils/nativePacketData';
+import {flushNativeShellRoute} from '../services/nativeShellCommit';
+import { dispatchChromeAction, type ChromeActionHandlers } from '../services/nativeChromeActions';
+
+/**
+ * 跨挂载单调 revision（2026-11-05 入场错位专项，与 useNativePage 同理）：
+ * nav/mini 在路由切换时被 remove（墓碑 retire），若 revision 每次挂载从 1 重计，
+ * 同 generation 下重新挂载的表面会被原生 ChromeFrameOrder 永久拒收——
+ * 表现就是导航栏/迷你条整个会话回退 WebView 或直接消失。
+ */
+const chromeRevisions = new Map<string, number>();
+const nextChromeRevision = (id: string): number => {
+    const next = (chromeRevisions.get(id) ?? 0) + 1;
+    chromeRevisions.set(id, next);
+    return next;
+};
+
+// src/hooks/useComposeChrome.ts
+// Event-driven metadata/layout; a live clock is anchored every 2s and on discontinuous seeks.
+// hold：可选的发布闸门（2026-11-06 启动专项）。重建后恢复未完成时迷你条会发布
+// 「还没有播放音乐」空包，顶掉原生缓存的上一会话迷你条；hold=true 期间 measure
+// 短路不发包，原生保持现状。hold 只是短暂启动窗口（恢复必然终止），不是固定延迟。
+export function useComposeChrome(ref:RefObject<HTMLElement|null>,id:ChromeSurfaceId,active:boolean,data:ChromeData,
+    actions:ChromeActionHandlers,clock?:MotionValue<number>,hold?:boolean) {
+    data=useStableNativeData(data);
+    const [ready,setReady]=useState(PREHIDE_COMPOSE_CHROME);
+    const latest=useRef({active,data,actions,clock,hold});latest.current={active,data,actions,clock,hold};
+    const scheduleRef=useRef<()=>void>(()=>{});
+    useLayoutEffect(()=>{if(PREHIDE_COMPOSE_CHROME&&ref.current)ref.current.dataset.composeNative='true';scheduleRef.current();},[data,active,ref,hold]);
+    useLayoutEffect(()=>{
+        const node=ref.current;if(!node||!active)return;
+        // Android owns these controls from Activity startup; acknowledgements only update data.
+        // A slow or failed bridge must never expose the legacy control tree.
+        let held=false,failed=false;
+        let disposed=false,started=false,frame=0,deadline=0,revision=0,lastAt=-Infinity,lastPosition=0;
+        let rejectStreak=0,retryTimer=0,setupAttempts=0;
+        let last:object|undefined;
+        const session=crypto.randomUUID(),generation=newChromeGeneration();
+        let listener:{remove:()=>Promise<void>}|undefined,resize:ResizeObserver|undefined,mutations:MutationObserver|undefined;
+        let unsubscribeClock:(()=>void)|undefined,unsubscribeActivity:(()=>void)|undefined;
+        const mark=(value:boolean,keepPending=false)=>{if(disposed)return;if(!value&&held){held=false;chromeWindowInteraction('end');}if(value||PREHIDE_COMPOSE_CHROME)node.dataset.composeNative='true';else delete node.dataset.composeNative;
+            if(keepPending&&PREHIDE_COMPOSE_CHROME)node.dataset.composePending='true';else delete node.dataset.composePending;setReady(PREHIDE_COMPOSE_CHROME||value);};
+        const remove=()=>chromeNative.remove({id,session}).catch(()=>{});
+        // Keep the last native presentation on an engine failure; never switch renderers.
+        const hostFailed=()=>{failed=true;started=false;mark(false);};
+        window.addEventListener(COMPOSE_CHROME_FAILURE_EVENT,hostFailed);
+        const position=()=>latest.current.clock?.get()??0;
+        const measure=async()=>{
+            frame=0;if(disposed||!started)return;
+            // Window backgrounding is not a route/visibility change. Preserve the native pose.
+            if(!isMainStageActive())return;
+            flushNativeShellRoute();
+            // Track only short layout transitions; a slow draw reply must not stall geometry.
+            if(performance.now()<deadline)frame=requestAnimationFrame(()=>void measure());
+            const current=latest.current;
+            // 发布闸门：恢复/初始化未完成时不发包，原生继续显示缓存迷你条。
+            if(current.hold)return;
+            // The native shell already owns route/overlay interaction. An invisible
+            // ancestor's web-entry inert timer must not hold its footer for another 400ms.
+            const nativeFooter=PREHIDE_COMPOSE_CHROME;
+            // Native footers own their placement. Measuring hidden HTML here can
+            // synchronously lay out the whole browsing tree for no visual benefit.
+            const rect=nativeFooter?{left:0,top:0,width:innerWidth,height:id==='nav'?54:id==='stage'?96:46}:node.getBoundingClientRect();
+            const style=nativeFooter?{opacity:'1',visibility:'visible',display:'block'}:getComputedStyle(node);
+            const enabled=current.active&&isMainStageActive()&&!hasBlockingChromeWindow()&&(nativeFooter||!node.closest('[inert]')&&node.getAttribute('aria-hidden')!=='true'
+                &&style.visibility!=='hidden'&&style.display!=='none'&&Number(style.opacity)>.01&&rect.width>0&&rect.height>0);
+            const safeBottom=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--folia-main-inset-bottom'))||0;
+            const packet={id,session,generation,enabled,left:rect.left,top:rect.top,width:rect.width,height:rect.height,alpha:Number(style.opacity),viewportWidth:innerWidth,safeBottom,data:current.data};
+            if(!sameNativeEnvelope(last,packet)){
+                last=packet;const sentRevision=revision=nextChromeRevision(id);
+                // Never queue a hide behind a pending first-draw acknowledgement.
+                if(!enabled)mark(false,true);
+                try{const result=await chromeNative.update({...packet,revision:sentRevision,data:{...packet.data,position:position()}});
+                    if(disposed||!started){void remove();return;}
+                    if(sentRevision!==revision)return;
+                    const accepted=result.accepted&&result.session===session;
+                    if(result.pendingNavigation)noteUiInteraction();
+                    mark(enabled&&accepted,!enabled&&accepted);
+                    if(enabled&&accepted&&(id==='nav'||id==='stage')){markStartupReady('chrome');if(id==='stage')markStartupReady('page')}
+                    navigationMark('chrome-surface-ack');
+                    lastAt=performance.now();lastPosition=position();
+                    // 拒收自愈（2026-11-06 底栏消失专项）：路由/会话/墓碑类一次性失配不再
+                    // 永久停摆 —— 与页面侧同一套退避（80/200/500/1000/2000ms 封顶），
+                    // 受理成功即清零；非 enabled 包（隐藏）不重发。
+                    if(enabled&&!accepted){last=undefined;rejectStreak+=1;
+                        if(!retryTimer)retryTimer=window.setTimeout(()=>{retryTimer=0;schedule();},Math.min(2000,80*Math.pow(2.5,Math.min(rejectStreak-1,4))));}
+                    else if(accepted)rejectStreak=0;
+                }catch(error){if(sentRevision===revision){console.warn('[ComposeChrome] Native control update failed',error);
+                    // 桥失败不再永久停摆：派发既有事件（监控可见）+ 有界重试恢复接管。
+                    // 必须清掉已发送的信封，否则重试 measure 会因去重直接跳过。
+                    last=undefined;rejectStreak=0;
+                    window.dispatchEvent(new Event(COMPOSE_CHROME_FAILURE_EVENT));
+                    if(!disposed&&setupAttempts<3){setupAttempts+=1;window.setTimeout(attemptSetup,1200*setupAttempts);}}}
+            }
+        };
+        const schedule=()=>{deadline=performance.now()+(PREHIDE_COMPOSE_CHROME?0:400);if(started&&!frame&&!disposed)frame=requestAnimationFrame(()=>void measure());};
+        // React visibility/route changes are delivered in the layout effect, before paint.
+        scheduleRef.current=()=>{deadline=performance.now()+(PREHIDE_COMPOSE_CHROME?0:400);cancelAnimationFrame(frame);frame=0;void measure();};
+        const onClock=()=>{
+            if(!started||disposed||node.dataset.composeNative!=='true'||!isMainStageActive())return;
+            const now=performance.now(),time=position();
+            if(chromeClockNeedsAnchor(now,lastAt,time,lastPosition,!!latest.current.data.playing)){
+                lastAt=now;lastPosition=time;void chromeNative.clock({id,session,trackKey:latest.current.data.trackKey??'',position:time}).catch(()=>{});
+            }
+        };
+        const overlaySelector='[data-folia-keyboard-window="true"]';
+        const relevant=(record:MutationRecord)=>record.type==='attributes'
+            ?record.attributeName==='data-folia-keyboard-window'||record.target instanceof Element&&(record.target===node||record.target.contains(node))
+            :[...record.addedNodes,...record.removedNodes].some(value=>value instanceof Element&&(value.matches(overlaySelector)||value.querySelector(overlaySelector)));
+        const syncVisibility=()=>{cancelAnimationFrame(frame);frame=0;void measure();};
+        const onTransition=(event:Event)=>{if(event.target instanceof Element&&(event.target===node||event.target.contains(node)))schedule();};
+        const teardownSetup=()=>{resize?.disconnect();mutations?.disconnect();unsubscribeActivity?.();unsubscribeClock?.();};
+        const setup=async()=>{
+            teardownSetup();
+            // failed 是全局失败事件的会话级标记：重建立接管时必须在这里清位，
+            // 否则上一轮失败会把本轮 setup 在 addListener 后直接短路（自愈失效）。
+            failed=false;
+            const supported=await canUseComposeChrome();
+            if(!supported){mark(false);return;}
+            listener?.remove().catch(()=>{});listener=await chromeNative.addListener('action',event=>{
+                if(disposed||failed||event.id!==id||event.session!==session)return;
+                noteUiInteraction();
+                navigationMark('chrome-event-js',event.nativeDispatchedAt,event.nativeGestureId);
+                if(event.action==='interactionEnd'){held=false;chromeWindowInteraction('end');return;}
+                if(!latest.current.active||node.dataset.composeNative!=='true'||hasBlockingChromeWindow()){
+                    navigationMark(!latest.current.active?'chrome-rejected-inactive':node.dataset.composeNative!=='true'?'chrome-rejected-ownership':'chrome-rejected-overlay');
+                    schedule();return;
+                }
+                if(event.action==='interactionStart'){held=true;chromeWindowInteraction('start');return;}
+                navigationMark('chrome-business-start',undefined,event.nativeGestureId);chromeWindowInteraction('start');try{dispatchChromeAction(latest.current.actions,event.action,event.value);}finally{chromeWindowInteraction('end');}
+            });
+            if(disposed){void listener?.remove();return;}
+            navigationMark('chrome-listener-ready');
+            started=true;
+            resize=new ResizeObserver(schedule);resize.observe(node);
+            mutations=new MutationObserver(records=>{if(records.some(relevant))syncVisibility();});
+            mutations.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['inert','aria-hidden','data-folia-keyboard-window']});
+            unsubscribeActivity=subscribeMainStageActivity(syncVisibility);unsubscribeClock=latest.current.clock?.on('change',onClock);
+            window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);
+            window.addEventListener('transitionrun',onTransition);syncVisibility();
+        };
+        const attemptSetup=()=>{
+            void setup().catch(error=>{
+                console.warn('[ComposeChrome] Native host unavailable',error);mark(false);
+                // 桥未就绪（Activity recreate 后首个调用被拒等）是一次性状态（底栏消失专项）：
+                // 有界重探恢复接管；失败仍派发既有事件（监控可见），超过 3 次放弃，不吞错不无限循环。
+                window.dispatchEvent(new Event(COMPOSE_CHROME_FAILURE_EVENT));
+                if(!disposed&&setupAttempts<3){setupAttempts+=1;window.setTimeout(attemptSetup,1200*setupAttempts);}
+            });
+        };
+        attemptSetup();
+        return()=>{
+            disposed=true;if(held)chromeWindowInteraction('end');setReady(PREHIDE_COMPOSE_CHROME);cancelAnimationFrame(frame);window.clearTimeout(retryTimer);resize?.disconnect();mutations?.disconnect();unsubscribeActivity?.();unsubscribeClock?.();
+            window.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('resize',schedule);window.removeEventListener('transitionrun',onTransition);
+            window.removeEventListener(COMPOSE_CHROME_FAILURE_EVENT,hostFailed);
+            // During a route exit the WebView footer can stay mounted for its outgoing animation.
+            // Keep its legacy paint suppressed until it either unmounts or native takeover restarts.
+            const wasNative=node.dataset.composeNative==='true'||node.dataset.composePending==='true';
+            if(!PREHIDE_COMPOSE_CHROME)delete node.dataset.composeNative;
+            if(wasNative&&PREHIDE_COMPOSE_CHROME)node.dataset.composePending='true';else delete node.dataset.composePending;
+            void listener?.remove();if(started)void remove();scheduleRef.current=()=>{};
+        };
+    },[id,ref,active]);
+    return ready;
+}

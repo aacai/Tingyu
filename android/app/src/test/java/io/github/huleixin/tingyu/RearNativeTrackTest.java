@@ -1,0 +1,64 @@
+package io.github.huleixin.tingyu;
+import org.junit.Test;
+import com.getcapacitor.JSObject;
+import org.json.JSONObject;
+import static org.junit.Assert.*;
+// android/app/src/test/java/io/github/huleixin/tingyu/RearNativeTrackTest.java
+public class RearNativeTrackTest {
+ @Test public void compatibleClockRejectsRetiredRequestsAndFreezesPauseBufferAndStaleClock() throws Exception {
+  long[] now={1000};RearNativeTrack.elapsedClock=()->now[0];
+  RearNativeTrack.compatible("web","qq:a","attempt1");
+  JSObject clock=new JSObject().put("positionMs",2000).put("rate",2).put("playing",true).put("capturedAtMs",System.currentTimeMillis());
+  RearNativeTrack.onCompatibleClock("web","qq:a","attempt1",clock);
+  now[0]+=1000;assertEquals(4000,RearNativeTrack.positionNow(),40);
+  now[0]+=20000;assertEquals(10000,RearNativeTrack.positionNow(),40);
+  clock.put("buffering",true).put("capturedAtMs",System.currentTimeMillis());
+  RearNativeTrack.onCompatibleClock("web","qq:a","attempt1",clock);
+  now[0]+=5000;assertEquals(2000,RearNativeTrack.positionNow());
+  RearNativeTrack.compatible("web","qq:b","attempt2");
+  RearNativeTrack.onCompatibleClock("web","qq:a","attempt1",clock);
+  assertFalse(RearNativeTrack.snapshot().getBoolean("compatibleClock"));assertEquals(0,RearNativeTrack.positionNow());
+  clock.put("capturedAtMs",System.currentTimeMillis()-10000);
+  RearNativeTrack.onCompatibleClock("web","qq:b","attempt2",clock);
+  assertFalse(RearNativeTrack.snapshot().getBoolean("compatibleClock"));
+  clock.put("playing",false).put("buffering",false).put("capturedAtMs",System.currentTimeMillis());
+  RearNativeTrack.onCompatibleClock("web","qq:b","attempt2",clock);now[0]+=5000;
+  assertEquals(2000,RearNativeTrack.positionNow());
+ }
+ @Test public void leasesRetireClocksAndReplayGetsANewEpoch() throws Exception {
+  RearNativeTrack.bindNative("a","qq:a",null);RearNativeTrack.onPlayback(true,5000);
+  String first=RearNativeTrack.epoch();
+  RearNativeTrack.handoff("a");RearNativeTrack.onPlayback(true,9000);
+  assertFalse(RearNativeTrack.hasTrack());assertEquals("handoff",RearNativeTrack.snapshot().getString("engine"));
+  RearNativeTrack.compatible("web","qq:b","request2");
+  assertEquals("compatible",RearNativeTrack.snapshot().getString("engine"));
+  RearNativeTrack.releaseCompatible("wrong");assertEquals("qq:b",RearNativeTrack.songKey());
+  RearNativeTrack.releaseCompatible("web");RearNativeTrack.bindNative("c","qq:a",null);
+  assertNotEquals(first,RearNativeTrack.epoch());
+  String repeated=RearNativeTrack.epoch();RearNativeTrack.bindNative("d","qq:a",null);assertNotEquals(repeated,RearNativeTrack.epoch());
+  repeated=RearNativeTrack.epoch();RearNativeTrack.repeatNative("d","qq:a",null);assertNotEquals(repeated,RearNativeTrack.epoch());
+ }
+ @Test public void twoHourMonotonicClockPauseAndSeekUseTheSameOutputAnchor(){
+  long[] now={1000};RearNativeTrack.elapsedClock=()->now[0];RearNativeTrack.bindNative("clock","qq:clock",null);
+  RearNativeTrack.onPlayback(true,1000,1.25f);now[0]+=7200000;assertEquals(9001000,RearNativeTrack.positionNow());
+  RearNativeTrack.onPlayback(false,9001000);now[0]+=60000;assertEquals(9001000,RearNativeTrack.positionNow());
+  RearNativeTrack.onPlayback(true,10000,1f);now[0]+=1000;assertEquals(11000,RearNativeTrack.positionNow());
+ }
+ @org.junit.Before public void before(){RearNativeTrack.elapsedClock=()->1000L;RearNativeTrack.clear();RearNativeTrack.bindNative("test","",null);}
+ @org.junit.After public void after(){RearNativeTrack.clear();RearNativeTrack.elapsedClock=android.os.SystemClock::elapsedRealtime;}
+ @Test public void switchingWithoutMetadataCannotKeepTheOldTitleOrNativeAuthority() throws Exception {
+  RearNativeTrack.onTrack("qq:a",new JSObject().put("title","A").put("artist","Artist").put("durationMs",10000));
+  RearNativeTrack.onPlayback(true,1000,1.5f);
+  assertEquals(1.5,RearNativeTrack.snapshot().getDouble("playbackRate"),.001);
+  RearNativeTrack.onTrack("qq:b",null);JSONObject next=RearNativeTrack.snapshot();
+  assertEquals("qq:b",next.getString("songKey"));assertEquals("",next.getString("title"));assertEquals("",next.getString("artist"));
+  RearNativeTrack.clear();assertFalse(RearNativeTrack.hasTrack());
+ }
+ @Test public void snapshotDoesNotMixTwoConcurrentTrackIdentities() throws Exception {
+  java.util.concurrent.atomic.AtomicReference<Throwable> error=new java.util.concurrent.atomic.AtomicReference<>();
+  Thread writer=new Thread(()->{try{for(int i=0;i<500;i++){String key="qq:"+i;RearNativeTrack.onTrack(key,new JSObject().put("title",key));}}catch(Throwable failure){error.set(failure);}});
+  writer.start();
+  while(writer.isAlive()){JSONObject value=RearNativeTrack.snapshot();String key=value.optString("songKey");if(!key.isEmpty())assertEquals(key,value.optString("title"));}
+  writer.join();if(error.get()!=null)throw new AssertionError(error.get());RearNativeTrack.clear();
+ }
+}

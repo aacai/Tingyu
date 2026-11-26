@@ -1,0 +1,49 @@
+import React, { lazy, Suspense } from 'react';
+import { useActiveLibrarySuiteId } from '../../../library/app/librarySuiteChoice';
+import { useAndroidLayoutSettingsStore } from '../../../stores/useAndroidLayoutSettingsStore';
+import { useSettingsModalStore } from '../../../stores/useSettingsModalStore';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import MobileSettingsLanding from '../../modal/settings/MobileSettingsLanding';
+import PlatformAccountsPage from '../../modal/settings/PlatformAccountsPage';
+import type SettingsModalType from '../../modal/SettingsModal';
+import { NATIVE_FIRST } from '../../../services/nativePages';
+import { loadSettingsModule, peekSettingsModule } from './settingsModule';
+import NativeSettingsLoading from '../../modal/settings/NativeSettingsLoading';
+
+// src/components/app/dialogs/SettingsDialogHost.tsx
+const SettingsModal = lazy(loadSettingsModule);
+const SearchSettingsPage = lazy(() => import('../../modal/settings/SearchSettingsPage'));
+const DiscoverySettingsPage = lazy(() => import('../../modal/settings/DiscoverySettingsPage'));
+export default function SettingsDialogHost(props: React.ComponentProps<typeof SettingsModalType>) {
+    const suite = useActiveLibrarySuiteId();
+    const phoneFit = useAndroidLayoutSettingsStore(state => state.phoneFitEnabled);
+    const returnToIndex = useSettingsModalStore(state => state.settingsModalState.returnToIndex);
+    const subviewBackStack = useSettingsModalStore(state => state.settingsModalState.subviewBackStack);
+    const wide = useMediaQuery('(min-width: 768px)') && !phoneFit;
+    const index = suite === 'mobile' && (!wide||NATIVE_FIRST) && (!props.initialTab || props.initialTab === 'options')
+        && !props.initialSubview && !props.initialAnchor && !props.initialVisualizerSection;
+    const ResolvedSettingsModal = peekSettingsModule()?.default ?? SettingsModal;
+    if (props.initialSubview === 'accounts') {
+        const parent = subviewBackStack?.at(-1);
+        let underlay: React.ReactNode = null;
+        if (parent?.initialSubview === 'discovery') {
+            underlay = <Suspense fallback={<NativeSettingsLoading section="discovery" onClose={props.onClose}/>}><DiscoverySettingsPage onClose={props.onClose}/></Suspense>;
+        } else if (parent?.initialSubview === 'search') {
+            underlay = <Suspense fallback={<NativeSettingsLoading section="search" onClose={props.onClose}/>}><SearchSettingsPage onClose={props.onClose}/></Suspense>;
+        } else if (returnToIndex && (!parent || (parent.initialTab === 'options' && !parent.initialSubview)) && suite === 'mobile' && (!wide || NATIVE_FIRST)) {
+            underlay = <MobileSettingsLanding onClose={props.onClose} />;
+        }
+        return (
+            <>
+                {underlay}
+                <PlatformAccountsPage onClose={props.onClose}/>
+            </>
+        );
+    }
+    if (props.initialSubview === 'search') return <Suspense fallback={<NativeSettingsLoading section="search" onClose={props.onClose}/>}><SearchSettingsPage onClose={props.onClose}/></Suspense>;
+    if (props.initialSubview === 'discovery') return <Suspense fallback={<NativeSettingsLoading section="discovery" onClose={props.onClose}/>}><DiscoverySettingsPage onClose={props.onClose}/></Suspense>;
+    return index ? <MobileSettingsLanding onClose={props.onClose} />
+        : <Suspense fallback={NATIVE_FIRST?<NativeSettingsLoading section={props.initialSubview} onClose={props.onClose}/>:suite === 'mobile' ? <MobileSettingsLanding onClose={props.onClose} /> : null}>
+            <ResolvedSettingsModal {...props} />
+        </Suspense>;
+}

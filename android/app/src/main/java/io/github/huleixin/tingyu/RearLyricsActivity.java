@@ -1,0 +1,412 @@
+package io.github.huleixin.tingyu;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.res.Configuration;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.hardware.display.DisplayManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.SystemClock;
+import android.view.Display;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.widget.FrameLayout;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
+import java.util.UUID;
+
+/** Dedicated native viewport hosting Folia's original visualizer, independent of the main activity. */
+public final class RearLyricsActivity extends Activity {
+    static final String EXTRA_SESSION = "folia_rear_session";
+    private static volatile String requestedSession = "";
+    /** Set while the window is hidden for a camera; {@link #isShowingOnDisplay} must not lie. */
+    private static volatile String yieldedSession = "";
+    private static volatile int requestedDisplay = -1;
+    private static volatile RearLyricsActivity shownActivity;
+    private static volatile WindowState lastWindowState;
+    private String session = "";
+    private boolean visible, drewFrame, contentReady, opaque, backRegistered, rendererQueued;
+    private boolean yieldingToCamera, exitRequested, destroyed, rendererPaused, recoveryQueued;
+    private final Handler ui=new Handler(android.os.Looper.getMainLooper());
+    private Runnable rendererRecovery;
+    private long lastResyncAt=-1000;
+    private int rendererRecoveries;
+    private FrameLayout root;
+    private WebView renderer;
+    private DisplayManager displayManager;
+    private final OnBackInvokedCallback backCallback = this::revealProgress;
+    private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
+        @Override public void onDisplayAdded(int id) { onDisplayChanged(id); }
+        @Override public void onDisplayRemoved(int id) { onDisplayChanged(id); }
+        @Override public void onDisplayChanged(int id) { updateViewport(); reportWindow(); }
+    };
+
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        if(LspRearBridge.selected(this)){RearLyricsTrace.record(this,"legacy-lsp-blocked","stale Activity closed");finish();return;}
+        session = getIntent().getStringExtra(EXTRA_SESSION);
+        if (!isCurrentSession(session)) { finish(); return; }
+        shownActivity = this;
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true);
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+            getWindow().setAttributes(attributes);
+        }
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        root = new RearInteractionFrame(this,new RearInteractionFrame.Actions(){
+            public boolean canInteract(){return contentReady && shouldRunRenderer();}
+            public boolean canDraw(){return RearDisplayPolicy.targetDisplay(currentDisplayId(), requestedDisplay) && isCurrentSession(session) && !exitRequested;}
+            public void exit(){RearLyricsCoordinator.get(RearLyricsActivity.this).dismissDisplaySession(session);}
+        });
+        setContentView(root);
+        root.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            private int lastDisplay = -2;
+            public boolean onPreDraw() {
+                int actual = currentDisplayId();
+                if (actual != lastDisplay) {
+                    lastDisplay = actual;
+                    syncRendererState("display-changed", true);
+                    record("display-changed", "actual=" + actual + ", expected=" + requestedDisplay);
+                }
+                return true;
+            }
+        });
+        root.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> updateViewport());
+        // The shell may stage this transparent Activity on the main display while locked.
+        // Create Chromium only after the window actually reaches the rear display.
+        displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
+        if (displayManager != null) displayManager.registerDisplayListener(displayListener, new android.os.Handler(getMainLooper()));
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
+            backRegistered = true;
+        }
+        updateViewport(); reportWindow(); record("create", "task=" + getTaskId() + ", display=" + currentDisplayId());
+    }
+
+    private void installRenderer() {
+        if (!shouldRunRenderer()) return;
+        disposeRenderer();
+        contentReady = false; drewFrame = false; rendererPaused=false;
+        renderer = new WebView(this) {
+            @Override protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                if (renderer==this && isCurrentSession(session) && !exitRequested && !drewFrame && contentReady && getWidth() > 0 && getHeight() > 0) { drewFrame = true; reportWindow(); }
+            }
+        };
+        final WebView installedRenderer = renderer;
+        record("renderer-created", "display=" + currentDisplayId() + ", density=" + getResources().getDisplayMetrics().density);
+        WebSettings settings = renderer.getSettings();
+        settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
+        // Honor the device-width meta viewport, never overview-zoom the layout after moving displays.
+        settings.setUseWideViewPort(true); settings.setLoadWithOverviewMode(false); settings.setTextZoom(100);
+        settings.setAllowFileAccess(false); settings.setAllowContentAccess(false);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        renderer.setBackgroundColor(Color.BLACK);
+        renderer.setHorizontalScrollBarEnabled(false); renderer.setVerticalScrollBarEnabled(false);
+        renderer.setOnLongClickListener(view -> true); renderer.setLongClickable(false);
+        if (Build.VERSION.SDK_INT >= 26) renderer.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+        renderer.setWebViewClient(new RearLyricsWebClient(getApplicationContext(), new RearLyricsWebClient.Events() {
+            @Override public void ready() {
+                if (renderer != installedRenderer || destroyed || exitRequested || !isCurrentSession(session)) return;
+                contentReady = true; syncRendererState("renderer-ready",true); renderer.invalidate(); reportWindow();
+                record("renderer-ready", "Folia original visualizer mounted");
+            }
+            @Override public void error(String message) {
+                if(renderer!=installedRenderer || destroyed || exitRequested)return;
+                record("web-error", message);
+                if(message.startsWith("WebView:"))recoverRenderer(installedRenderer,"main-frame-error");
+            }
+            @Override public void rendererGone() {
+                recoverRenderer(installedRenderer,"render-process-gone");
+            }
+        }));
+        renderer.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage message) {
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) record("web-console", message.message());
+                return true;
+            }
+        });
+        root.addView(renderer, new FrameLayout.LayoutParams(-1, -1));
+        renderer.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> reportWindow());
+        renderer.loadUrl("https://rear.folia.local/rear-lyrics.html");
+    }
+
+    private boolean shouldRunRenderer() {
+        Display display=getWindow().getDecorView().getDisplay();
+        return !destroyed && !isFinishing() && !exitRequested && RearDisplayPolicy.targetDisplay(currentDisplayId(), requestedDisplay)
+            && RearDisplayPolicy.render(isCurrentSession(session),RearLyricsCoordinator.get(this).canPresent(),
+                yieldingToCamera,RearLyricsCoordinator.get(this).isSleeping(),display==null?Display.STATE_UNKNOWN:display.getState());
+    }
+    /** Per-view pause only: pauseTimers would also freeze the compatibility audio WebView. */
+    private void syncRendererState(String reason, boolean forceResync) {
+        // Pausing Chromium does not erase its last frame. Hide before any early return.
+        boolean target = RearDisplayPolicy.targetDisplay(currentDisplayId(), requestedDisplay);
+        if (root != null) root.setVisibility(target && !yieldingToCamera && !exitRequested ? View.VISIBLE : View.INVISIBLE);
+        if (renderer != null) renderer.setVisibility(target && !yieldingToCamera && !exitRequested ? View.VISIBLE : View.INVISIBLE);
+        if (!target && opaque) {
+            root.setBackgroundColor(Color.TRANSPARENT);
+            if (Build.VERSION.SDK_INT >= 30) setTranslucent(true);
+            opaque = false;
+        }
+        if(renderer==null)return;
+        boolean running=shouldRunRenderer();
+        if(!running) {
+            if(!rendererPaused) {
+                renderer.evaluateJavascript("window.dispatchEvent(new CustomEvent('folia-rear-power',{detail:{sleeping:true}}))",null);
+                renderer.onPause(); rendererPaused=true;
+                record("render-suspended",reason);
+            }
+            return;
+        }
+        boolean resumed=rendererPaused;
+        if(resumed){renderer.onResume();rendererPaused=false;}
+        if(contentReady && (resumed||forceResync) && SystemClock.elapsedRealtime()-lastResyncAt>=350) {
+            lastResyncAt=SystemClock.elapsedRealtime();
+            renderer.evaluateJavascript("window.dispatchEvent(new CustomEvent('folia-rear-resync',{detail:{reason:"+org.json.JSONObject.quote(reason)+"}}))",null);
+            record("render-resync",reason+", session="+session);
+        }
+        if(resumed)renderer.evaluateJavascript("window.dispatchEvent(new CustomEvent('folia-rear-power',{detail:{sleeping:false}}))",null);
+    }
+    private void disposeRenderer() {
+        WebView old=renderer; renderer=null; contentReady=false; drewFrame=false;
+        if(old==null)return;
+        root.removeView(old);old.stopLoading();old.setWebChromeClient(null);old.setWebViewClient(new android.webkit.WebViewClient());old.destroy();
+    }
+    /** Bounded, session-bound repair. A missing packaged main document also fails open. */
+    private void recoverRenderer(WebView failed,String reason) {
+        if(renderer!=failed || destroyed || isFinishing() || exitRequested || !isCurrentSession(session) || recoveryQueued)return;
+        disposeRenderer(); reportWindow();
+        if(rendererRecoveries++>=2){RearLyricsCoordinator.get(this).rendererUnavailable(session);return;}
+        recoveryQueued=true;String expected=session;
+        record("renderer-recovery",reason+", attempt="+rendererRecoveries);
+        rendererRecovery=()->{
+            recoveryQueued=false;
+            if(destroyed || !RearDisplayPolicy.matching(expected,session) || !shouldRunRenderer())return;
+            installRenderer();updateViewport();
+        };
+        ui.postDelayed(rendererRecovery,rendererRecoveries*300L);
+    }
+    static void pauseForExit(String expected) {
+        RearLyricsActivity activity=shownActivity;
+        if(activity==null || !RearDisplayPolicy.matching(expected,activity.session))return;
+        activity.exitRequested=true;activity.visible=false;
+        activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if(activity.rendererRecovery!=null)activity.ui.removeCallbacks(activity.rendererRecovery);
+        activity.recoveryQueued=false;
+        activity.syncRendererState("display-exit",false);
+        if(activity.root!=null)activity.root.setVisibility(View.INVISIBLE);
+        activity.reportWindow();
+    }
+
+    /** Wallpaper fills the rear display; the web surface supplies a separate camera-safe lyric viewport. */
+    private void updateViewport() {
+        if (root == null || destroyed) return;
+        if(!shouldRunRenderer()){syncRendererState("display-state",false);return;}
+        if (yieldingToCamera) return;
+        boolean onRear = currentDisplayId() == requestedDisplay;
+        if (!onRear) { if (renderer != null) renderer.setVisibility(View.INVISIBLE); return; }
+        if (renderer == null) {
+            if (root.getWidth() <= 0 || root.getHeight() <= 0) return;
+            if (!rendererQueued && !recoveryQueued) {
+                rendererQueued = true;
+                root.post(() -> {
+                    rendererQueued = false;
+                    if (!shouldRunRenderer()) return;
+                    if (renderer == null) installRenderer();
+                    updateViewport();
+                });
+            }
+            return;
+        }
+        renderer.setVisibility(View.VISIBLE); syncRendererState("display-state",false);
+        if (onRear && !opaque) {
+            if (Build.VERSION.SDK_INT >= 30) setTranslucent(false);
+            root.setBackgroundColor(Color.BLACK); opaque = true;
+        }
+        if (onRear) { RearLyricsViewportMetrics.fit(root, renderer); renderer.invalidate(); reportWindow(); }
+    }
+    private void revealProgress() {
+        if (renderer != null && currentDisplayId() == requestedDisplay) {
+            renderer.evaluateJavascript("window.dispatchEvent(new Event('folia-rear-reveal'))", null);
+            record("back-consumed", "Revealed progress; rear lyrics stay open");
+        }
+    }
+    static void setPowerSleeping(boolean sleeping) {
+        RearLyricsActivity activity = shownActivity;
+        if (activity == null) return;
+        String expected=activity.session;
+        activity.runOnUiThread(() -> {
+            if(activity.destroyed || activity.exitRequested || !isCurrentSession(expected) || !RearDisplayPolicy.matching(expected,activity.session))return;
+            if (activity.yieldingToCamera) return;
+            if (sleeping) activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            activity.syncRendererState("cover-power",false);
+        });
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (currentDisplayId() == requestedDisplay && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == KeyEvent.ACTION_UP) revealProgress();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+    @Override public void onBackPressed() {
+        if (currentDisplayId() == requestedDisplay) revealProgress(); else super.onBackPressed();
+    }
+    @Override protected void onStart() {
+        super.onStart(); visible = true; drewFrame = false;
+        syncRendererState("activity-start",true);
+        updateViewport(); reportWindow(); record("start", "display=" + currentDisplayId());
+    }
+    @Override protected void onResume() {
+        super.onResume();syncRendererState("activity-resume",true);updateViewport();
+    }
+    @Override protected void onStop() {
+        visible = false; reportWindow();
+        record("stop", "display=" + currentDisplayId());
+        // Main-screen locking may briefly stop the rear Activity too. The keeper restores only
+        // its rear task; do not freeze its independent clock during that transition.
+        if (!RearLyricsCoordinator.get(this).wanted()) syncRendererState("activity-stop",false);
+        RearLyricsCoordinator.get(this).windowChanged();
+        super.onStop();
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String nextSession = intent.getStringExtra(EXTRA_SESSION);
+        if (!isCurrentSession(nextSession)) return;
+        boolean changed=!RearDisplayPolicy.matching(session,nextSession);
+        setIntent(intent); session = nextSession; drewFrame = false;
+        if(changed){exitRequested=false;rendererRecoveries=0;lastResyncAt=-1000;}
+        syncRendererState("new-intent",true);updateViewport(); reportWindow(); record("new-intent", "display=" + currentDisplayId());
+    }
+    @Override public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration); drewFrame = false;
+        record("configuration", "display=" + currentDisplayId() + ", densityDpi=" + configuration.densityDpi);
+        if (root != null) root.post(() -> { updateViewport(); reportWindow(); });
+    }
+    @Override protected void onDestroy() {
+        destroyed=true;
+        if(rendererRecovery!=null)ui.removeCallbacks(rendererRecovery);
+        if (displayManager != null) displayManager.unregisterDisplayListener(displayListener);
+        if (Build.VERSION.SDK_INT >= 33 && backRegistered) getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
+        record("destroy", "finishing=" + isFinishing() + ", changingConfiguration=" + isChangingConfigurations());
+        disposeRenderer();
+        if (shownActivity == this) { shownActivity = null; lastWindowState = null; }
+        RearLyricsCoordinator.get(this).windowChanged();
+        super.onDestroy();
+    }
+    private void record(String event, String message) {
+        getSharedPreferences("rear_lyrics", MODE_PRIVATE).edit().putString("last_window_event", event + ": " + message).apply();
+        RearLyricsTrace.record(this, event, message);
+    }
+    static String prepareLaunch(int displayId) {
+        RearLyricsViewportMetrics.reset();
+        requestedSession = UUID.randomUUID().toString(); requestedDisplay = displayId; return requestedSession;
+    }
+    static boolean isEnabled() { return !requestedSession.isEmpty(); }
+    static boolean hasWindow() { return shownActivity!=null; }
+    static String currentSession() { return requestedSession; }
+    static boolean isCurrentSession(String session) { return session != null && !session.isEmpty() && session.equals(requestedSession); }
+    static WindowState windowState(String session) {
+        WindowState state = lastWindowState;
+        return state != null && state.session.equals(session) && isCurrentSession(session) ? state : null;
+    }
+    static WindowState windowState() { return windowState(requestedSession); }
+    static boolean isShowingOnDisplay(int id) {
+        if (!yieldedSession.isEmpty() && yieldedSession.equals(requestedSession)) return false;
+        WindowState state = windowState();
+        return state != null && state.displayId == id && state.visible && state.drawn && state.width > 0 && state.height > 0;
+    }
+    static boolean isYieldingToCamera() {
+        return !yieldedSession.isEmpty() && yieldedSession.equals(requestedSession);
+    }
+    static WindowState attachedWindowOnDisplay(int id) {
+        RearLyricsActivity activity = shownActivity;
+        WindowState state = windowState();
+        return activity != null && !activity.isFinishing() && state != null && state.displayId == id ? state : null;
+    }
+    static void finishIfShown() {
+        requestedSession = ""; requestedDisplay = -1; yieldedSession = "";
+        RearLyricsActivity activity = shownActivity;
+        if (activity != null) activity.runOnUiThread(activity::finish);
+    }
+    /** Hide only the dedicated rear task immediately, while its power lease is released asynchronously. */
+    static void yieldToCamera() {
+        String expected=requestedSession;
+        yieldedSession = expected;
+        RearLyricsActivity activity = shownActivity;
+        if (activity == null) return;
+        activity.runOnUiThread(() -> {
+            if (activity.isFinishing() || activity.destroyed || activity.exitRequested || !isCurrentSession(expected) || !RearDisplayPolicy.matching(expected,activity.session)) return;
+            activity.yieldingToCamera = true;
+            activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (activity.root != null) activity.root.setVisibility(View.INVISIBLE);
+            activity.syncRendererState("camera-yield",false);
+            if (activity.renderer != null) activity.renderer.setVisibility(View.INVISIBLE);
+            try { activity.moveTaskToBack(true); }
+            catch (RuntimeException error) { activity.record("camera-yield", error.getClass().getSimpleName()); }
+        });
+    }
+    /**
+     * The camera gave the rear display back. Without this the yield flag stayed set for the
+     * lifetime of the activity instance: reportWindow() returns early while it is true, so a
+     * reused lyric window could never report itself visible again and the resume launch timed
+     * out with "原背屏歌词窗口未能恢复到前台" every single time.
+     */
+    static void resumeFromCamera() {
+        RearLyricsActivity activity = shownActivity;
+        if (activity == null || !RearLyricsCoordinator.get(activity).canPresent()) return;
+        String expected=activity.session;
+        yieldedSession = "";
+        activity.runOnUiThread(() -> {
+            if (activity.isFinishing() || activity.destroyed || activity.exitRequested || !isCurrentSession(expected) || !RearDisplayPolicy.matching(expected,activity.session) || !RearLyricsCoordinator.get(activity).canPresent() || !activity.yieldingToCamera) return;
+            activity.yieldingToCamera = false;
+            if (activity.root != null) activity.root.setVisibility(RearDisplayPolicy.targetDisplay(activity.currentDisplayId(), requestedDisplay) ? View.VISIBLE : View.INVISIBLE);
+            if (activity.renderer != null) {
+                activity.renderer.setVisibility(RearDisplayPolicy.targetDisplay(activity.currentDisplayId(), requestedDisplay) ? View.VISIBLE : View.INVISIBLE);
+                activity.syncRendererState("camera-return",true);
+            }
+            // A window that yielded before Chromium was created still needs its renderer; the
+            // normal layout/display callbacks may already have fired while yielding was true.
+            activity.updateViewport();
+            activity.reportWindow();
+            activity.record("camera-yield-ended", "rear display returned to Tingyu, display=" + activity.currentDisplayId());
+        });
+    }
+    private int currentDisplayId() {
+        Display display = getWindow().getDecorView().getDisplay();
+        if (display == null) display = getWindowManager().getDefaultDisplay();
+        return display == null ? -1 : display.getDisplayId();
+    }
+    private void reportWindow() {
+        if (shownActivity != this || !isCurrentSession(session)) return;
+        if (renderer != null && currentDisplayId() == requestedDisplay) RearLyricsViewportMetrics.capture(renderer);
+        lastWindowState = new WindowState(session, currentDisplayId(), getTaskId(), visible, drewFrame,
+            renderer == null ? 0 : renderer.getWidth(), renderer == null ? 0 : renderer.getHeight());
+    }
+    static final class WindowState {
+        final String session;
+        final int displayId, taskId, width, height;
+        final boolean visible, drawn;
+        WindowState(String session, int displayId, int taskId, boolean visible, boolean drawn, int width, int height) {
+            this.session = session; this.displayId = displayId; this.taskId = taskId;
+            this.visible = visible; this.drawn = drawn; this.width = width; this.height = height;
+        }
+        @Override public String toString() {
+            return "display=" + displayId + ", task=" + taskId + ", visible=" + visible + ", rendered=" + drawn + ", safe viewport=" + width + "x" + height;
+        }
+    }
+}

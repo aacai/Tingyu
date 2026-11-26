@@ -1,0 +1,63 @@
+# 第三方组件与许可说明
+
+本仓库是 [chthollyphile/folia-major](https://github.com/chthollyphile/folia-major) 的非官方 Android 移植 fork，
+整体以 **AGPL-3.0** 发布，完整许可原文见 [LICENSE](LICENSE)。
+
+下面列出本仓库直接包含、或随构建产物（APK / Web 包）一起分发的第三方组件。
+这些许可（MIT / BSD / ISC / Apache-2.0 / AGPL-3.0）都与 AGPL-3.0 兼容，
+各自仍遵循其原始许可，署名与许可声明一并保留。
+
+## 1. 仓库内直接包含的第三方代码
+
+| 位置 | 组件 | 许可 | 说明 |
+|---|---|---|---|
+| `src/components/visualizer/nebbia/` | Folia Android / Folia，chthollyphile 及贡献者 | AGPL-3.0 | 固定 `37ba4903a7148883d75492f0f07afbda2c68f647` 的完整雾笺渲染模块；听屿适配共享时钟、频段动感、异步排版、移动设置和资源回收。原注释与署名保留。 |
+| `nebbiaRaindrop.png` | raindrop-fx 1.0.8 | MIT | 原授权见旁边 `nebbiaRaindrop.LICENSE.txt`，构建同时附带 `licenses/nebbia/raindrop-fx-LICENSE.txt`。 |
+| 构建产物 `nebbia-strokes.json` | AnimCJK，固定 `99dba566b92daf45ae20d05e6c91d3f68d8619f2` | Arphic Public License | 独立笔顺数据资产；JSON 内附改动说明，完整授权及 NOTICE 随构建分发到 `licenses/nebbia-strokes/`，不改变其原许可。下载内容有固定 SHA256 校验；缺数据或授权时构建失败。 |
+| `src/utils/lyricRenderQuality.ts`、`src/types/lyricRenderQuality.ts` | [whycfawa/folia-android](https://github.com/whycfawa/folia-android) / [chthollyphile/folia-major](https://github.com/chthollyphile/folia-major)，原作者 chthollyphile 及贡献者 | AGPL-3.0 | 选择性移植固定 Tag `v0.7.27-android.449`（`37ba4903a7148883d75492f0f07afbda2c68f647`）的画质类型及归一化策略；保留原始文件注释，Android 主背屏隔离、档位和运行期适配由听屿补充。 |
+| `src/nativeBridge/vendor/crypto-es.mjs` | crypto-es（crypto-js 的 ESM 分支） | MIT | 文件内已保留完整的 MIT 许可原文与版权声明 |
+| `src/utils/rearFrameGeometry.ts`、对应几何单测 | [wmqc97/folia-android](https://github.com/wmqc97/folia-android) | AGPL-3.0 | 复用提交 `4d86ad210d3004a61fce1378a253220b05c7fb8c` 的背屏构图几何代码；`rearCameraSafeArea.ts` 的坐标换算参考其 `rearLyricsBridge.ts`。原项目作者及许可声明保留，听屿接入时区分整屏动画与当前句安全区。 |
+| `src/nativeBridge/vendor/node-forge.mjs` | node-forge 的转发垫片 | BSD-3-Clause / MIT | 仅数百字节的 `require` 转发，不包含 node-forge 实现本体 |
+
+## 2. 接口契约与算法参考的开源项目
+
+`src/nativeBridge/api/` 下的平台桥接代码由本 fork 编写整理，接口契约、加密参数与签名算法参考了以下项目：
+
+- [chthollyphile/folia-major](https://github.com/chthollyphile/folia-major) — AGPL-3.0（本 fork 的上游）
+- [MakcRe/KuGouMusicApi](https://github.com/MakcRe/KuGouMusicApi) — MIT
+- [yakult-green-tea/qq-music-api](https://github.com/yakult-green-tea/qq-music-api) — MIT
+- [NeteaseCloudMusicApiEnhanced/api-enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced) — MIT
+
+汽水音乐协议基于上游 Android.280 的 WebCrypto 移植，接口类型来自 `qishui-music-api@0.2.2`（MIT）；许可原文保存在 `src/services/onlineMusic/qishui/PROTOCOL-LICENSE.txt`。花火歌词样式来自 Folia 上游，保留原有 AGPL-3.0 许可。
+
+## 3. 运行期 npm 依赖
+
+| 包 | 许可 |
+|---|---|
+| `@capacitor/android`、`@capacitor/browser`、`@capacitor/core`、`@capacitor/splash-screen`、`@capacitor/status-bar` | MIT |
+| `@google/genai` | Apache-2.0 |
+| `@neteasecloudmusicapienhanced/api` | MIT |
+| `@xhayper/discord-rpc` | ISC |
+| `@yakult-green-tea/qq-music-api` | MIT |
+| `axios`、`electron-store`、`electron-updater`、`fflate`、`file-type`、`koffi`、`kugoumusicapi`、`music-metadata`、`onnxruntime-node`、`ws` | MIT |
+| `bodian-music-api` | AGPL-3.0 |
+| `busboy` | MIT |
+
+完整的依赖树与锁定版本见 `package-lock.json`；每个包的许可原文随其 npm 包或上游仓库提供。
+
+## 4. 内容与平台声明
+
+App 中播放、展示的在线音乐音频、歌词、专辑封面等内容的版权属于各自权利人，
+**不在本仓库的开源许可范围内**。本仓库只包含播放器与接口调用的实现代码。
+
+请尊重数字版权，并在条件允许时通过官方平台支持正版音乐。
+
+## 5. 与上游的关系
+
+本 fork 与上游作者无关，也不代表上游项目的立场或观点。
+上游 README 中「仅供个人学习、技术交流与非营利测试使用，请勿用于商业盈利用途」的声明同样适用于本 fork。
+
+
+## 沉浸极简播放器
+
+移植自 MeloX Android 0.7.3（GPL-3.0），commit c04f36b9af540806b3bb185b347572e9ca12d87d；包含其记载的 MeloX 与 BetterLyrics GPL-3.0 实现。来源、排除项、变更及文件映射见 [移植声明](third_party/melox/PROVENANCE.md)。完整正文见 [许可证](third_party/melox/LICENSE)。应用内「设置 → 关于听屿 → 第三方开源许可证」提供离线文本与源码入口。

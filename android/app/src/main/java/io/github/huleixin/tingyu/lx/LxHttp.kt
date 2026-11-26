@@ -1,0 +1,268 @@
+package io.github.huleixin.tingyu.lx
+
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Call
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.net.IDN
+import java.net.URI
+import java.util.Locale
+import java.util.concurrent.TimeUnit
+
+// 脚本的 lx.request —— 底层走 OkHttp，规则与 WebView 侧 http.ts 逐一对应。
+//
+// 边界（这一条比"能不能用"更重要）：
+// - 只认公网 http(s)，userinfo、内网、localhost、本机代理端口一律拒绝；
+// - Host 由已验证的目标地址决定；脚本自己的 Cookie/Origin 可以显式传入，但不读取应用凭据；
+// - 单次请求体 ≤1MB、响应 ≤2MB、重定向 ≤5 跳且跨域时剥掉授权头；
+// - 不携带任何本应用的用户凭据，脚本拿什么头自己给。
+object LxHttp {
+
+    private const val MAX_BODY = 1_048_576
+    private const val MAX_RESPONSE = 2_097_152
+    private const val MAX_REDIRECTS = 5
+    private val METHODS = setOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD")
+    private val BLOCKED_HEADERS = setOf("host")
+    private val SENSITIVE_HEADERS = setOf("authorization", "proxy-authorization", "cookie", "x-token", "x-api-key", "x-auth-token", "x-access-token")
+
+    // 真机 1.3.50 的第二次停播里，后台解析连续三次 `connection closed`（status=-1）。
+    // 原来每一跳都 `CLIENT.newBuilder().build()`：OkHttp 的 Builder 在没显式给
+    // connectionPool/dispatcher 时**每次都会新建一个**，于是每个请求一条新连接池、
+    // 一套新线程池（旧的从不 shutdown）。后果是在后台弱网下每次都重新 DNS+TCP+TLS，
+    // 握手窗口一旦被系统网络省电掐掉就是 connection closed，前面也没法复用已验证的连接。
+    // 这里把连接池与调度器提成进程级共享，per-request 的 client 只是换超时，不再新建池。
+    private val POOL = okhttp3.ConnectionPool(8, 5, TimeUnit.MINUTES)
+    private val DISPATCHER = okhttp3.Dispatcher()
+
+    private val CLIENT = OkHttpClient.Builder()
+        .dns(object : okhttp3.Dns {
+            override fun lookup(hostname: String): List<java.net.InetAddress> = okhttp3.Dns.SYSTEM.lookup(hostname).also { addresses ->
+                if (addresses.any { it.isAnyLocalAddress || it.isLoopbackAddress || it.isLinkLocalAddress || it.isSiteLocalAddress || it.isMulticastAddress ||
+                    (it.address.size == 16 && (it.address[0].toInt() and 0xfe) == 0xfc) ||
+                    (it.address.size == 4 && ((it.address[0].toInt() and 255) == 0 || (it.address[0].toInt() and 255) >= 224 ||
+                        ((it.address[0].toInt() and 255) == 100 && (it.address[1].toInt() and 255) in 64..127))) })
+                    throw java.net.UnknownHostException("LX destination is not public")
+            }
+        })
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .connectionPool(POOL)
+        .dispatcher(DISPATCHER)
+        .build()
+
+    /**
+     * 「脚本给的 options」→「真正要发出去的那一跳」的映射。
+     *
+     * 抽出来是因为这正是出故障的地方：method / body / headers 全在这里落地。
+     * 有了它，双引擎对照台和单元测试都能直接断言"脚本要 POST + JSON 体，
+     * 宿主有没有照做"，而不用真的打网络。
+     */
+    fun plan(rawUrl: String, options: JSONObject): LxRequestPlan {
+        val url = validateUrl(rawUrl)
+        val headers = LinkedHashMap<String, String>()
+        val declared = options.opt("headers")
+        if (declared is JSONObject) {
+            val keys = declared.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (!BLOCKED_HEADERS.contains(key.lowercase(Locale.US))) headers[key] = declared.opt(key).toString()
+            }
+        }
+        val timeout = (options.opt("timeout") as? Number)?.toLong()?.takeIf { it > 0 }?.coerceAtMost(60_000) ?: 13_000L
+        val method = options.optString("method", "GET").uppercase(Locale.US).let { if (it.isEmpty()) "GET" else it }
+        if (!METHODS.contains(method)) throw IllegalArgumentException("HTTP method unsupported: $method")
+        // 脚本没给 UA 时不要露出 okhttp/4.x：一部分音源站按 UA 分流甚至直接关连接。
+        // 用系统 UA（与 WebView 侧 CapacitorHttp 同一来源），脚本显式给的一律优先。
+        if (headers.keys.none { it.equals("User-Agent", true) }) {
+            headers["User-Agent"] = System.getProperty("http.agent")?.takeIf { it.isNotBlank() }
+                ?: "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
+        }
+
+        var body: String? = null
+        val form = options.opt("form")
+        if (form is JSONObject) {
+            val encoded = StringBuilder()
+            val keys = form.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (encoded.isNotEmpty()) encoded.append('&')
+                encoded.append(enc(key)).append('=').append(enc(form.opt(key).toString()))
+            }
+            body = encoded.toString()
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+        } else if (!options.isNull("formData")) {
+            val fields = options.optJSONObject("formData") ?: throw IllegalArgumentException("formData must be an object")
+            val boundary = "tingyu-lx-" + java.util.UUID.randomUUID().toString()
+            val encoded = StringBuilder()
+            fields.keys().forEach { key ->
+                require(!key.contains('\r') && !key.contains('\n') && !key.contains('"')) { "Invalid multipart field" }
+                val value = fields.opt(key)
+                require(value is String || value is Number || value is Boolean) { "Multipart fields must be scalar values" }
+                encoded.append("--$boundary\r\nContent-Disposition: form-data; name=\"$key\"\r\n\r\n$value\r\n")
+            }
+            encoded.append("--$boundary--\r\n")
+            body = encoded.toString()
+            headers.keys.removeAll { it.equals("Content-Type", true) }
+            headers["Content-Type"] = "multipart/form-data; boundary=$boundary"
+        } else if (!options.isNull("body")) {
+            // 对象/数组请求体必须按 JSON 序列化（与 WebView http.ts 的 JSON.stringify 同语义）；
+            // 早先是 raw.toString()，对象会变成 Java 的 com.xxx@hash，服务端永远读不懂。
+            body = LxJson.bodyText(options.opt("body"))
+            if (!headers.keys.any { it.equals("Content-Type", true) }) headers["Content-Type"] = "application/json"
+        }
+        if ((body?.toByteArray(Charsets.UTF_8)?.size ?: 0) > MAX_BODY) throw IllegalArgumentException("Request too large")
+        return LxRequestPlan(url, method, headers, body, timeout)
+    }
+
+    /**
+     * 执行脚本的一次请求，返回交给 JS 的 JSON 文本：{statusCode, headers, body}。
+     * 失败直接抛，由引擎映射成脚本回调里的 err。
+     */
+    fun request(rawUrl: String, options: JSONObject): String {
+        return request(rawUrl, options) { }
+    }
+
+    fun request(rawUrl: String, options: JSONObject, onCall: (Call) -> Unit): String = requestWithClient(rawUrl, options, CLIENT, onCall)
+
+    internal fun requestWithClient(rawUrl: String, options: JSONObject, client: OkHttpClient, onCall: (Call) -> Unit = {}): String {
+        val first = plan(rawUrl, options)
+        var target = first.url
+        var activeMethod = first.method
+        var activeBody = first.body
+        var activeHeaders = first.headers
+        val timeout = first.timeoutMs
+        var redirect = 0
+        val startedAt=System.nanoTime()
+        while (true) {
+            val remaining=timeout-(System.nanoTime()-startedAt)/1_000_000L
+            if(remaining<=0)throw java.net.SocketTimeoutException("LX HTTP timeout")
+            val response = execute(target, activeMethod, activeHeaders, activeBody, remaining, options.optBoolean("binary"), onCall, client)
+            val location = response.optString("location", "").takeIf { it.isNotEmpty() }
+            val status = response.optInt("statusCode", 0)
+            if (status in 301..308 && location != null) {
+                if (++redirect > MAX_REDIRECTS) throw IllegalArgumentException("too many redirects")
+                val next = validateUrl(URI(URI(target).toString()).resolve(location).toString(), allowRedirectTarget = true)
+                val nextHeaders = LinkedHashMap(activeHeaders)
+                val oldOrigin = originOf(target)
+                val newOrigin = originOf(next)
+                if (oldOrigin != newOrigin) nextHeaders.keys.removeAll { SENSITIVE_HEADERS.contains(it.lowercase(Locale.US)) }
+                val downgrade = status == 303 || ((status == 301 || status == 302) && activeMethod == "POST")
+                target = next
+                if (downgrade) {
+                    activeMethod = "GET"
+                    activeBody = null
+                }
+                activeHeaders = nextHeaders
+                continue
+            }
+            return response.toString()
+        }
+    }
+
+    /** 一跳请求的完整形态。重定向时 method/body/headers 会在循环里被改写，所以每跳都要重新算。 */
+    data class LxRequestPlan(
+        val url: String,
+        val method: String,
+        val headers: Map<String, String>,
+        val body: String?,
+        val timeoutMs: Long,
+    )
+
+    private fun execute(url: String, method: String, headers: Map<String, String>, body: String?, timeoutMs: Long, binary: Boolean, onCall: (Call) -> Unit, client: OkHttpClient): JSONObject {
+        val builder = Request.Builder().url(url)
+        headers.forEach { (key, value) -> builder.header(key, value) }
+        if (body != null && method != "GET" && method != "HEAD") {
+            builder.method(method, body.toRequestBody(contentType(headers)))
+        } else {
+            builder.method(method, if (method == "GET" || method == "HEAD") null else "".toRequestBody(null))
+        }
+        val call = client.newBuilder()
+            .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .build()
+            .newCall(builder.build())
+        onCall(call)
+        call.execute().use { response ->
+            val source = response.body?.source()
+            val data = source?.readByteArray((MAX_RESPONSE + 1).toLong().let { limit ->
+                // Read at most the budget plus one byte; never allocate an unbounded body.
+                if (source.request(limit)) limit else source.buffer.size
+            }) ?: ByteArray(0)
+            if (data.size > MAX_RESPONSE) throw IllegalArgumentException("Response too large")
+            val text = String(data, Charsets.UTF_8)
+            val outHeaders = JSONObject()
+            response.headers.forEach { pair -> outHeaders.put(pair.first, pair.second) }
+            // JSON responses may be scalars too. Keep arbitrary JS/text downloads intact.
+            val trimmed=text.trim()
+            val candidate=trimmed.startsWith("{")||trimmed.startsWith("[")||trimmed.startsWith("\"")||
+                Regex("(?:true|false|null|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)").matches(trimmed)
+            val parsed=if(candidate)try {
+                val tokenizer=org.json.JSONTokener(trimmed)
+                val value=tokenizer.nextValue()
+                if(tokenizer.nextClean().code==0)value else text
+            }catch(_:Throwable){text}else text
+            return JSONObject()
+                .put("statusCode", response.code)
+                .put("statusMessage", response.message)
+                .put("headers", outHeaders)
+                .put("location", response.header("Location", ""))
+                .put("binary", binary)
+                .put("body", if (binary) org.json.JSONArray(data.map { it.toInt() and 255 }) else parsed ?: "")
+        }
+    }
+
+    private fun originOf(url: String): String = URI(url).let {
+        "${it.scheme.lowercase(Locale.US)}://${it.host.lowercase(Locale.US)}:${if(it.port>=0)it.port else if(it.scheme.equals("https",true))443 else 80}"
+    }
+
+    private fun contentType(headers: Map<String, String>) =
+        (headers.entries.firstOrNull { it.key.equals("Content-Type", true) }?.value ?: "application/json").toMediaType()
+
+    // ------------------------------------------------------------------ guards
+
+    /** 公网 HTTP(S) 白名单校验，与 JS 侧 validateRemoteUrl 同规则。 */
+    @JvmOverloads
+    fun validateUrl(input: String, allowRedirectTarget: Boolean = false): String {
+        val uri = URI(input.trim())
+        val scheme = uri.scheme?.lowercase(Locale.US)
+        if (scheme != "http" && scheme != "https") throw IllegalArgumentException("only http(s) is allowed")
+        if (!uri.userInfo.isNullOrEmpty()) throw IllegalArgumentException("credentials in URL are not allowed")
+        val host = (uri.host ?: throw IllegalArgumentException("missing host")).lowercase(Locale.US)
+            .trim('[', ']').let { if (it.startsWith("xn--")) IDN.toUnicode(it) else it }
+        if (!host.contains('.')) throw IllegalArgumentException("host must be public")
+        if (host == "localhost" || host.endsWith(".local")) throw IllegalArgumentException("local host is not allowed")
+        if (host == "127.0.0.1" || host == "0.0.0.0" || host == "::1") throw IllegalArgumentException("loopback is not allowed")
+        val literal = host.matches(Regex("^\\d+(\\.\\d+){3}\$"))
+        if (literal) {
+            val parts = host.split('.').map { it.toInt() }
+            val blocked = parts[0] == 10 || parts[0] == 127 || parts[0] == 0 ||
+                (parts[0] == 192 && parts[1] == 168) ||
+                (parts[0] == 169 && parts[1] == 254) ||
+                (parts[0] == 172 && parts[1] in 16..31)
+            if (blocked) throw IllegalArgumentException("private address is not allowed")
+        }
+        return uri.toString()
+    }
+
+    fun hostOf(url: String): String = try {
+        URI(url).host?.lowercase(Locale.US) ?: ""
+    } catch (_: Throwable) {
+        ""
+    }
+
+    private fun clamp(value: Any?, min: Int, max: Int): Int {
+        val number = when (value) {
+            is Number -> value.toInt()
+            is String -> value.toIntOrNull()
+            else -> null
+        } ?: return max.coerceAtMost(15_000)
+        return number.coerceIn(min, max)
+    }
+
+    private fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+}

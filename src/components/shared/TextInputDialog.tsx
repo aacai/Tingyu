@@ -1,0 +1,104 @@
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import ThemedDialog from './ThemedDialog';
+import { setStatusMessage } from '../../stores/useStatusMessageStore';
+import { useDialogSubmission } from './useDialogSubmission';
+
+interface TextInputDialogProps {
+    isOpen: boolean;
+    title: string;
+    description?: string;
+    placeholder?: string;
+    confirmLabel?: string;
+    initialValue?: string;
+    isDaylight?: boolean;
+    onClose: () => void;
+    onConfirm: (value: string) => Promise<void> | void;
+}
+
+const TextInputDialog: React.FC<TextInputDialogProps> = ({
+    isOpen,
+    title,
+    description,
+    placeholder,
+    confirmLabel,
+    initialValue = '',
+    isDaylight = false,
+    onClose,
+    onConfirm,
+}) => {
+    const { t } = useTranslation();
+    const [value, setValue] = React.useState(initialValue);
+    const { busy: isSubmitting, submit } = useDialogSubmission(isOpen);
+
+    React.useEffect(() => {
+        if (isOpen) {
+            setValue(initialValue);
+        }
+    }, [initialValue, isOpen]);
+
+    const inputClass = isDaylight
+        ? 'bg-black/[0.04] border-black/10 text-zinc-900 placeholder:text-zinc-400'
+        : 'bg-white/[0.06] border-white/10 text-white placeholder:text-white/30';
+    const cancelClass = isDaylight
+        ? 'bg-zinc-100/80 hover:bg-zinc-200 border-zinc-200 text-zinc-700'
+        : 'bg-white/5 hover:bg-white/10 border-white/10 text-white';
+
+    const handleConfirm = async () => {
+        const trimmedValue = value.trim();
+        if (!trimmedValue) {
+            return;
+        }
+
+        await submit(() => onConfirm(trimmedValue), onClose, () => {
+            setStatusMessage({ type: 'error', text: t('search.error') });
+        });
+    };
+
+    return (
+        <ThemedDialog
+            isOpen={isOpen}
+            onClose={onClose}
+            isDaylight={isDaylight}
+            title={title}
+            description={description}
+            footer={(
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className={`rounded-full border px-5 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${cancelClass}`}
+                     data-settings-style='{"radius":64,"border":true,"font":14,"weight":500,"padding":[20,10,20,10]}' data-settings-layout="row">
+                        {t('localMusic.cancel')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleConfirm}
+                        disabled={isSubmitting || !value.trim()}
+                        className="rounded-full bg-sky-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+                     data-settings-style='{"radius":64,"font":14,"weight":500,"padding":[20,10,20,10]}' data-settings-layout="row">
+                        {confirmLabel || t('localMusic.save')}
+                    </button>
+                </>
+            )}
+        >
+            <input
+                autoFocus
+                type="text"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleConfirm();
+                    }
+                }}
+                placeholder={placeholder}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none transition-colors focus:border-sky-400 ${inputClass}`}
+             data-settings-style='{"radius":16,"border":true,"font":14,"padding":[16,12,16,12]}' data-settings-layout="column"/>
+        </ThemedDialog>
+    );
+};
+
+export default TextInputDialog;

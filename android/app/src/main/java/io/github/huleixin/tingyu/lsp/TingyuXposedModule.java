@@ -1,0 +1,75 @@
+package io.github.huleixin.tingyu.lsp;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
+
+// android/app/src/main/java/io/github/huleixin/tingyu/lsp/TingyuXposedModule.java
+/** Framework power bridge plus opt-in rear-centre card host; never inject SystemUI. */
+public final class TingyuXposedModule implements IXposedHookLoadPackage {
+    private static boolean installed;
+    private static final RearDisplayPower power = new RearDisplayPower();
+    @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam param) {
+        // 最早入口：先记录实际包名/进程名/构建标识。没有这一行，就无法区分
+        // 「模块没被注入」「注入了别的进程」「注入了旧版本」。
+        String entry = "handleLoadPackage pkg=" + param.packageName + " process=" + param.processName
+            + " build=" + io.github.huleixin.tingyu.BuildConfig.BUILD_ID;
+        android.util.Log.i("TingyuRearHost", entry);
+        XposedBridge.log("TingyuRearHost: " + entry);
+        // 背屏中心可能在主进程之外运行 launcher（:subscreen 等）。1.3.96 只认主进程，
+        // 进程名一变就整条宿主链路静默消失。通信初始化的代价很低，按包名在所有进程安装，
+        // 由 Controller 上报真实进程名与 priority 供应用侧选择。
+        if (io.github.huleixin.tingyu.RearHostContract.TARGET.equals(param.packageName)) {
+            io.github.huleixin.tingyu.RearHostHooks.install(param.classLoader, param.processName);
+            return;
+        }
+        if (!"android".equals(param.packageName) || !"android".equals(param.processName)) return;
+        power.install(param.classLoader);
+        try {
+            Class<?> ams = XposedHelpers.findClass("com.android.server.am.ActivityManagerService", param.classLoader);
+            XposedBridge.hookAllMethods(ams, "systemReady", new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam hook) {
+                    if (hook.hasThrowable() || installed) return;
+                    try {
+                        Context context = (Context) XposedHelpers.getObjectField(hook.thisObject, "mContext");
+                        install(context); installed = true;
+                    } catch (Throwable error) { XposedBridge.log(error); }
+                }
+            });
+        } catch (Throwable error) { XposedBridge.log(error); }
+    }
+    private static void install(Context context) {
+        HandlerThread thread = new HandlerThread("TingyuRearBridge"); thread.start();
+        Handler handler = new Handler(thread.getLooper());
+        power.setTimer(context, handler);
+        SystemRearBinder service = new SystemRearBinder(context, power);
+        BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent intent) {
+                if (!RearBridgeContract.REQUEST.equals(intent.getAction())) return;
+                // Receiver is permission protected and delivery is off system_server's main thread.
+                try {
+                    Bundle extras = new Bundle(); extras.putBinder("service", service);
+                    extras.putInt("protocol", RearBridgeContract.VERSION);
+                    extras.putString("profile", service.profile());
+                    Bundle connected = context.getContentResolver().call(android.net.Uri.parse("content://" + RearBridgeContract.AUTHORITY),
+                        "connect", null, extras);
+                    if (connected != null) service.watchClient(connected.getBinder("lifeline"), handler);
+                } catch (Throwable error) { XposedBridge.log("Tingyu rear handshake: " + error); }
+            }
+        };
+        IntentFilter filter = new IntentFilter(RearBridgeContract.REQUEST);
+        if (Build.VERSION.SDK_INT >= 33)
+            context.registerReceiver(receiver, filter, RearBridgeContract.PERMISSION, handler, Context.RECEIVER_EXPORTED);
+        else context.registerReceiver(receiver, filter, RearBridgeContract.PERMISSION, handler);
+    }
+}

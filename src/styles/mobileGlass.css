@@ -1,0 +1,147 @@
+/* Phone surfaces share one restrained material. Optical refraction is not needed for transport. */
+.mobile-library.ml-footer > nav[data-native-glass] {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    pointer-events: none;
+}
+.mobile-library.ml-footer > nav[data-native-glass] > * { visibility: hidden; }
+.mobile-library.ml-footer::before { display: none; }
+
+.mobile-library.ml-footer > .ml-mini,
+.mobile-library.ml-footer > nav {
+    position: relative;
+    background:
+        var(--ty-glass-highlight),
+        var(--ty-glass-tint);
+    border-color: var(--ty-glass-border);
+    box-shadow: var(--ty-glass-shadow);
+    -webkit-backdrop-filter: blur(var(--ty-glass-blur)) saturate(var(--ty-glass-saturate));
+    backdrop-filter: blur(var(--ty-glass-blur)) saturate(var(--ty-glass-saturate));
+    transition: background-color var(--ty-duration-base) ease, border-color var(--ty-duration-base) ease, transform var(--ty-duration-base) var(--ty-ease-standard);
+}
+
+.mobile-library.ml-footer > .ml-mini { isolation: isolate; }
+.mobile-library.ml-footer > nav {
+    isolation: isolate;
+    background-color: var(--ty-glass-tint-nav);
+}
+
+.mobile-library.ml-footer nav svg {
+    stroke-width: 1.8;
+    transition: transform var(--ty-duration-base) var(--ty-ease-standard), opacity var(--ty-duration-base) ease;
+}
+
+.mobile-library.ml-footer nav button[aria-current='page']:not([disabled]) {
+    background: var(--it-mobile-glass-background-1);
+    border: var(--it-mobile-glass-border-1);
+    box-shadow: var(--it-mobile-glass-box-shadow-1);
+    transition: transform 240ms var(--ty-ease-standard), background-color var(--ty-duration-base) ease;
+}
+
+.mobile-library.ml-footer nav button[aria-current='page'] svg {
+    fill: none;
+    stroke-width: 2;
+    transform: translateY(-1px);
+}
+
+/* Tingyu's independent vector assets own their fills; keep optical size stable on selection. */
+.mobile-library.ml-footer nav .tingyu-nav-icon {
+    width: 24px;
+    height: 24px;
+    flex: none;
+    object-fit: contain;
+}
+.mobile-library.ml-footer nav button[aria-current='page'] {
+    color: var(--it-mobile-glass-color-1);
+}
+
+.mobile-library.ml-footer nav button,
+.mobile-library .ml-mini-controls .ml-icon {
+    transition: transform var(--ty-duration-base) var(--ty-ease-standard), color var(--ty-duration-base) ease, background-color var(--ty-duration-base) ease,
+        opacity var(--ty-duration-base) ease;
+}
+
+.mobile-library.ml-footer nav button:active:not(:disabled),
+.mobile-library .ml-mini-controls .ml-icon:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.mobile-library.ml-footer > [data-soft-glass],
+.mobile-player-stage .mps-player[data-soft-glass] {
+    background: var(--ty-glass-highlight-strong), var(--ty-glass-tint-strong);
+    border: 1px solid var(--ty-glass-border-strong);
+    box-shadow: var(--it-mobile-glass-box-shadow-2);
+    -webkit-backdrop-filter: blur(var(--ty-glass-blur)) saturate(var(--ty-glass-saturate-soft));
+    backdrop-filter: blur(var(--ty-glass-blur)) saturate(var(--ty-glass-saturate-soft));
+    /* A moving filter/transform transition would compete with the existing footer WAAPI. */
+    transition: background-color 160ms ease, border-color 160ms ease;
+}
+[data-soft-glass='sleeping'],
+.mobile-player-stage[data-hidden='true'] .mps-player {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+.mobile-library button { touch-action: manipulation; }
+.ml-mini-swipe-window {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 19px;
+    touch-action: pan-y;
+}
+/* 与原生 Compose 版一致：封面从裁剪容器内缩 10px，避开 19px 圆角，不再被左边缘切掉。
+   .ml-mini 的 8px 左内边距保留在裁剪容器外层，这里只移动封面本身；
+   box-sizing: border-box 保证 width:100% 不会因 padding 溢出。 */
+.mobile-library .ml-mini-track { width: 100%; padding-left: 10px; touch-action: pan-y; }
+.ml-mini[data-dragging] .ml-mini-track { will-change: transform; transition: none !important; }
+.ml-mini-preview {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+}
+.ml-mini-preview > span { display: none; }
+.ml-mini[data-swipe='next'] [data-direction='next'],
+.ml-mini[data-swipe='previous'] [data-direction='previous'] { display: inline; }
+.mobile-library .ml-mini-controls .ml-mini-toggle { position: relative; }
+.ml-mini-toggle > svg:not(.ml-mini-progress) { width: 17px; height: 17px; }
+.ml-mini-progress { position: absolute; width: 40px; height: 40px; pointer-events: none; }
+.ml-mini-progress circle { fill: none; stroke-width: 2.2; }
+.ml-mini-progress-track { stroke: var(--it-mobile-glass-stroke-1); }
+.ml-mini-progress-value { stroke: currentColor; stroke-linecap: round; }
+/* Press feedback starts immediately; expensive layout/filter properties are never animated. */
+.mobile-library.ml-footer button, .mobile-player-stage button { transition-duration: 90ms; }
+
+[data-folia-android='true'] [data-folia-search-workspace] {
+    padding-top: calc(14px + var(--folia-main-inset-top, 0px));
+    /* 搜索覆盖底栏，不能保留迷你播放器/导航的 130px 占位。
+       手势安全区由搜索内部的滚动容器处理，输入法展开时也不会重复预留。 */
+    padding-bottom: 0;
+}
+
+/* Non-Blink engines are explicitly marked by the hook and retain a restrained blur fallback. */
+[data-glass-engine='fallback-blur'] {
+    background-color: var(--ty-glass-tint-fallback);
+}
+
+[data-glass-engine='backdrop-refraction'] {
+    --liquid-glass-active: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mobile-library.ml-footer > nav,
+    .mobile-library.ml-footer > .ml-mini,
+    .mobile-library.ml-footer nav svg,
+    .mobile-library.ml-footer nav button,
+    .mobile-library .ml-mini-controls .ml-icon {
+        transition: none !important;
+    }
+}

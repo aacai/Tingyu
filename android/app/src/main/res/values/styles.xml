@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/interfaceLaunchBackground</item>
+    </style>
+
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@null</item>
+        <!-- Complete rounded artwork in a padded system icon; Compose owns the brand animation. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/brand_splash_logo</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/brand_splash_logo</item>
+        <item name="windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <!-- 启动窗口底色 = 原生首页渐变首色（values/values-night 的 interfaceLaunchBackground）。
+             原先用 @color/foliaWindowBackground(#09090B)：与页面深绿底不同色，冷启动/重建时
+             就是录屏 68736/68737 里那块纯黑卡片。三个变体（base/Light/System）必须同源。 -->
+        <item name="android:windowBackground">@color/interface_launch_classic_dark</item>
+        <item name="windowSplashScreenBackground">@color/interface_launch_classic_dark</item>
+        <item name="android:windowSplashScreenBackground">@color/interface_launch_classic_dark</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+    <!-- Compatibility aliases: old Android starting-window preferences may reference these IDs. -->
+    <style name="AppTheme.NoActionBarLaunch.Light" parent="InterfaceLaunch_classic_Light" />
+    <style name="AppTheme.NoActionBarLaunch.System" parent="InterfaceLaunch_classic_System" />
+</resources>

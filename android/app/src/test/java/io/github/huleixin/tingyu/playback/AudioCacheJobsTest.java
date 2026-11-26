@@ -1,0 +1,91 @@
+package io.github.huleixin.tingyu.playback;
+
+import android.content.Context;
+import androidx.test.core.app.ApplicationProvider;
+import java.lang.reflect.Constructor;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.junit.Test;
+import org.junit.Before;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
+import static org.junit.Assert.*;
+
+// Exercise the durable database without network downloads or mocked media verification.
+@RunWith(RobolectricTestRunner.class) @Config(sdk=34)
+@GraphicsMode(GraphicsMode.Mode.LEGACY)
+public class AudioCacheJobsTest {
+    @Before public void isolateApplicationSingleton()throws Exception{
+        java.lang.reflect.Field field=AudioCacheStore.class.getDeclaredField("instance");field.setAccessible(true);
+        AudioCacheStore old=(AudioCacheStore)field.get(null);
+        if(old!=null){old.awaitWrites();java.lang.reflect.Field io=AudioCacheStore.class.getDeclaredField("io");io.setAccessible(true);((java.util.concurrent.ExecutorService)io.get(old)).shutdownNow();}
+        field.set(null,null);
+    }
+    private AudioCacheJobs open(Context context) throws Exception {
+        Constructor<AudioCacheJobs> constructor=AudioCacheJobs.class.getDeclaredConstructor(Context.class);
+        constructor.setAccessible(true);return constructor.newInstance(context);
+    }
+    private JSONObject track(String route) throws Exception {
+        return new JSONObject().put("songKey","online:qq:id").put("providerId","qq").put("mediaId","id")
+            .put("sourceId","qq-original").put("title","Fixture").put("artist","Artist").put("durationMs",120000)
+            .put("providerData",new JSONObject().put("audioCacheRoute",route)
+                .put("audioCacheKeys",new JSONObject().put("standard","offline_v1_standard_"+route+"_online:qq:id")));
+    }
+    private void close(AudioCacheJobs jobs) {jobs.stop();jobs.io.shutdownNow();jobs.bulk.shutdownNow();jobs.db.close();}
+    @Test public void duplicatePagesCancellationAndSourceChangesRemainDurable() throws Exception {
+        Context context=ApplicationProvider.getApplicationContext();context.deleteDatabase("audio-cache-jobs.db");
+        AudioCacheJobs jobs=open(context);String route=new String(new char[64]).replace("\0","a");
+        try {
+            jobs.cache.configure(new JSONObject().put("enabled",true));jobs.sourceChanged(route);
+            JSONArray tracks=new JSONArray().put(track(route));
+            JSONObject page=new JSONObject().put("collection","qq:playlist").put("cacheRoute",route).put("quality","standard")
+                .put("descriptor",new JSONObject().put("source","online").put("providerId","qq").put("type","playlist").put("id","playlist"))
+                .put("tracks",tracks).put("offset",50);
+            jobs.catalog(page);jobs.catalog(page);
+            assertEquals(1,jobs.status().getInt("pending"));assertEquals(50,jobs.status().getJSONArray("catalogs").getJSONObject(0).getInt("offset"));
+            jobs.action("cancel");assertEquals(1,jobs.status().getInt("cancelled"));
+            jobs.enqueue(tracks,"qq:playlist","standard");assertEquals(1,jobs.status().getInt("pending"));
+            jobs.db.execSQL("UPDATE jobs SET state='running'");
+            close(jobs);jobs=open(context);assertEquals(1,jobs.status().getInt("pending"));
+            jobs.sourceChanged(new String(new char[64]).replace("\0","b"));
+            assertEquals(1,jobs.status().getInt("stale"));assertEquals(0,jobs.status().getInt("pending"));
+            jobs.action("retry");assertEquals(1,jobs.status().getInt("stale"));
+            jobs.enqueue(tracks,"qq:old-playlist","standard");assertEquals(0,jobs.status().getInt("pending"));
+            jobs.action("clear");assertEquals(0,jobs.status().getJSONArray("tasks").length());
+        } finally {close(jobs);}
+    }
+    @Test public void manualTasksArePagedAndPauseSurvivesReopening() throws Exception {
+        Context context=ApplicationProvider.getApplicationContext();context.deleteDatabase("audio-cache-jobs.db");
+        AudioCacheJobs jobs=open(context);String route=new String(new char[64]).replace("\0","a");
+        try{
+            jobs.cache.configure(new JSONObject().put("enabled",false).put("wifiOnly",true));jobs.sourceChanged(route);
+            JSONArray tracks=new JSONArray();for(int i=0;i<46;i++){
+                JSONObject track=track(route);track.put("title","Track "+i);
+                track.getJSONObject("providerData").getJSONObject("audioCacheKeys").put("standard","unique-"+i);
+                tracks.put(track);
+            }
+            jobs.enqueue(tracks,"playlist","standard");assertEquals(46,jobs.status().getInt("pending"));
+            assertEquals(0,jobs.status().getJSONArray("tasks").length());
+            assertEquals(20,jobs.tasks("active","playlist",0).getJSONArray("tasks").length());
+            assertEquals(20,jobs.tasks("active","playlist",20).getJSONArray("tasks").length());
+            assertEquals(6,jobs.tasks("active","playlist",40).getJSONArray("tasks").length());
+            assertEquals(0,jobs.tasks("failed","playlist",0).getInt("total"));
+            assertTrue(context.getSharedPreferences("resource-cache-policy",0).getBoolean("wifiOnly",false));
+            jobs.action("pause");assertTrue(jobs.status().getBoolean("paused"));
+            close(jobs);jobs=open(context);assertTrue(jobs.status().getBoolean("paused"));
+            jobs.action("resume");assertFalse(jobs.status().getBoolean("paused"));assertFalse(jobs.cache.enabled());
+        }finally{close(jobs);}
+    }
+
+    @Test public void overlappingPlaylistsRetainTheirOwnTaskMembership()throws Exception{
+        Context context=ApplicationProvider.getApplicationContext();context.deleteDatabase("audio-cache-jobs.db");AudioCacheJobs jobs=open(context);
+        try{String route=new String(new char[64]).replace("\0","a");jobs.sourceChanged(route);JSONArray tracks=new JSONArray().put(track(route));
+            jobs.enqueue(tracks,"first","standard");jobs.enqueue(tracks,"second","standard");
+            assertEquals(1,jobs.status().getInt("pending"));assertEquals(2,jobs.status().getJSONArray("collections").length());
+            assertEquals(1,jobs.tasks("active","first",0).getInt("total"));assertEquals(1,jobs.tasks("active","second",0).getInt("total"));
+        }finally{close(jobs);}
+    }
+
+}

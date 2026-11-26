@@ -1,0 +1,133 @@
+import { registerPlugin } from '@capacitor/core';
+import { isAndroidNativeRuntime } from '../utils/platform';
+import type { NativePageEvent, NativePageFrame, NativePageId } from '../types/nativePages';
+import type { GraphicsMode } from '../utils/graphicsDiagnosticsBuild';
+
+// src/services/nativeChrome.ts
+export const COMPOSE_CHROME = import.meta.env.VITE_TINGYU_COMPOSE_CHROME === 'true';
+export const PREHIDE_COMPOSE_CHROME = COMPOSE_CHROME && isAndroidNativeRuntime();
+export const COMPOSE_CHROME_FAILURE_EVENT = 'tingyu-compose-chrome-failed';
+export type ChromeSurfaceId = 'nav' | 'mini' | 'stage';
+/**
+ * Surfaces that emit actions. The Compose minimal player is a fourth emitter with no frame of its
+ * own (native reads its data directly), so it is an action id but never a surface id.
+ */
+export type ChromeActionId = ChromeSurfaceId | 'minimal';
+export type NativeStageLayout = {active:boolean;width:number;height:number;safeBottom:number;shown:boolean;shownBottom:number;hiddenBottom:number;durationMs:number};
+export type ChromeData = {
+    controlsHidden?: boolean;
+    playerTransition?: 'idle' | 'to-stage' | 'to-minimal';
+    title?: string; artist?: string; cover?: string; trackKey?: string; playing?: boolean; disabled?: boolean;
+    canNext?: boolean; canPrevious?: boolean; duration?: number; selected?: number; loop?: string;
+    sleepPreferredMinutes?: number;
+    light?: boolean; reducedMotion?: boolean; accent?: string; ink?: string; labels?: Record<string,string>; vertical?: boolean;
+};
+export type ChromeAction = {nativeDispatchedAt?:number;nativeGestureId?:number;id: ChromeActionId; session: string; action: string; value: number};
+export type ChromeFrame = {id: ChromeSurfaceId; session: string; generation: number; revision: number; enabled: boolean;
+    left: number; top: number; width: number; height: number; alpha: number; viewportWidth: number; safeBottom?:number; data: ChromeData & {position?: number}};
+export const chromeNative = registerPlugin<{
+    playerStyle(value:{style?:'classic'|'immersive';open?:boolean}):Promise<{style:string}>;
+    addListener(name:'playerStyleChanged',callback:(value:{style:string})=>void):Promise<{remove:()=>Promise<void>}>;
+    graphicsProbe():Promise<Record<string,unknown>&{mode:GraphicsMode}>;
+    graphicsConfigure(value:{mode:GraphicsMode}):Promise<{saved:boolean}>;
+    addListener(name:'graphicsMark',listener:(value:Record<string,unknown>&{mode:GraphicsMode})=>void):Promise<{remove():Promise<void>}>;
+    getStageLayout():Promise<NativeStageLayout>;
+    addListener(name:'stageLayout',callback:(value:NativeStageLayout)=>void):Promise<{remove:()=>Promise<void>}>;
+    navigationDiagnostics(value:{enabled?:boolean}):Promise<{enabled:boolean;nativeNow:number;startedAt:number;frames?:Record<string,unknown>;frameWindowStartedAt?:number;frameSamplingActive?:boolean;samples:{phase:string;at:number;elapsedMs?:number;gestureId?:number;detail?:Record<string,unknown>}[]}>;
+    appearance(value:{mode?:string;style?:string}):Promise<{style:string;mode:'system'|'light'|'dark';systemLight:boolean;light:boolean}>;
+    addListener(name:'appearanceChanged',callback:(value:{systemLight:boolean})=>void):Promise<{remove:()=>Promise<void>}>;
+    motionPreference():Promise<{reducedMotion:boolean}>;
+    addListener(name:'motionPreferenceChanged',callback:(value:{reducedMotion:boolean})=>void):Promise<{remove:()=>Promise<void>}>;
+    probe(): Promise<{supported:boolean;engine:string;pages?:boolean;minimalPlayer?:boolean;
+        /** 二级操作面板能力位：只有 true 时 JS 才把 ⋯ 面板交给原生绘制。 */
+        panels?:boolean;
+        /** 冷启动首帧取证：进程启动后 3 秒内的路由 / 底栏 / 安全区 / 交接点。 */
+        startup?:{windowMs?:number;cap?:number;entries?:{at:number;phase:string;detail?:Record<string,unknown>}[]}}>;
+    update(frame: ChromeFrame): Promise<{accepted:boolean;session:string;pendingNavigation?:boolean}>;
+    /**
+     * Compose minimal player bridge. Carries only what native cannot know for itself: play mode,
+     * neighbour availability, and the browser-audio position anchor. One small frame per second.
+     */
+    minimalPlayerFrame(frame: import('./nativeMinimalPlayer').MinimalPlayerFrame): Promise<{accepted:boolean}>;
+    /** 队列抽屉要的数据。只在打开时或版本变化时推，不是每帧。 */
+    minimalQueue(snapshot: import('./nativeMinimalQueue').NativeQueueSnapshot): Promise<{ accepted: boolean }>;
+    /**
+     * 轻量当前包：切歌/换播放模式时推，几十字节。队列内容没变就不发整包。
+     */
+    minimalQueueCurrent(value: { v: number; i: number; k: string; mode: string }): Promise<void>;
+    /**
+     * 让原生打开它自己的队列抽屉。任何页面（首页、舞台、极简页）都走这一个入口，
+     * Android 上不再有第二个队列界面。
+     */
+    openMinimalQueue(): Promise<void>;
+    /** 当前路由共享的原生睡眠定时菜单，宿主不可用时拒绝请求。 */
+    openThirdPartyLicenses(): Promise<void>;
+    openSleepTimer(): Promise<{ accepted: boolean }>;
+    /**
+     * 原生工具页（音质/效果器/歌词工具/洛雪音源）的状态快照。
+     * 只在某个工具页打开期间推；对账没变化就零字节。第 11 轮起替代 WebView 弹窗。
+     */
+    minimalTools(snapshot: import('./nativeMinimalTools').NativeToolsSnapshot): Promise<{ accepted: boolean }>;
+    /**
+     * 让原生打开某个工具页。WebView 侧的入口（舞台菜单、迷你播放器）在 Compose 桥可用时
+     * 都走这里 —— 不再打开 WebView 弹窗，也就不再触发极简页的让位与回退。
+     * page: 1=音质 2=效果器 3=歌词工具 4=洛雪音源。
+     */
+    openMinimalTools(value: { page: number }): Promise<void>;
+    /** Hand the minimal player surface back to the WebView (session-scoped). */
+    minimalPlayerRelease(value:{session:string}): Promise<void>;
+    clock(value:{id:ChromeSurfaceId;session:string;trackKey:string;position:number}):Promise<void>;
+    remove(value:{id:ChromeSurfaceId;session:string}):Promise<void>;
+    pageUpdate(frame:NativePageFrame):Promise<{accepted:boolean;session:string;reason?:string}>;
+    pageRemove(value:{id:NativePageId;session:string}):Promise<void>;
+    /**
+     * 二级操作面板包（原生化专项·第 21 轮）：歌曲 ⋯ / 歌单 ⋯ / 音源选择 / 本地文件操作…
+     * React 出声明式模型，Compose 画；点击只回传动作 id。
+     */
+    panelUpdate(frame:import('../types/nativePanels').NativePanelFrame):Promise<{accepted:boolean;session:string}>;
+    panelRemove(value:{id:string;session:string}):Promise<void>;
+    shell(value:{generation:number;revision:number;route:string;webOverlay:boolean;selectedTab:number;pageTarget?:string;entryKey?:string;settingsRoot?:boolean;reducedMotion?:boolean;navigation?:string;collectionDetail?:boolean;playerPresentation?:'minimal'|'stage';stageVisible?:boolean;stageDisplayActive?:boolean;minimalPage?:'cover'|'lyrics';minimalLyricsKeepOn?:boolean}):Promise<void>;
+    collapseStage():Promise<void>;
+    addListener(name:'action',callback:(value:ChromeAction)=>void):Promise<{remove:()=>Promise<void>}>;
+    addListener(name:'pageAction',callback:(value:NativePageEvent)=>void):Promise<{remove:()=>Promise<void>}>;
+    addListener(name:'panelAction',callback:(value:import('../types/nativePanels').NativePanelEvent)=>void):Promise<{remove:()=>Promise<void>}>;
+}>('TingyuChrome');
+type ChromeCapabilities={supported:boolean;pages?:boolean;minimalPlayer?:boolean;panels?:boolean};
+let probe:Promise<ChromeCapabilities>|undefined;
+let generation=0;
+export function newChromeGeneration():number { return generation=Math.max(Date.now()*1000,generation+1); }
+export function composeChromeCapabilities():Promise<ChromeCapabilities> {
+    if (!COMPOSE_CHROME || !isAndroidNativeRuntime()) return Promise.resolve({supported:false});
+    // probe 被拒（Activity recreate 后 bridge 未就绪等）是一次性状态（2026-11-06 底栏消失专项）：
+    // 不缓存失败——重置缓存让下一次挂载/重试重新探测，避免整会话永久停摆。
+    return probe ??= chromeNative.probe().catch(error=>{probe=undefined;throw error;});
+}
+export function canUseComposeChrome():Promise<boolean> {
+    return composeChromeCapabilities().then(value=>value.supported);
+}
+export function hasBlockingChromeWindow():boolean {
+    // The stage's small top menu does not overlap the transport; sheets and dialogs do.
+    // 设置弹窗自己就是原生页面（nativeShellRouting 也把它排除在 webOverlay 之外）：
+    // 它在的时候底栏必须照常显示，所以这里不能算"阻塞窗口"。二级/三级页由
+    // MobileLibraryStage 的 active（isSubSettingsViewOpen）关掉，不靠这个函数。
+    return [...document.querySelectorAll<HTMLElement>('[data-folia-keyboard-window="true"]')]
+        .some(node=>{
+            if(node.dataset.nativeChromeOverlay==='nonblocking'||node.closest('[data-folia-settings-overlay]'))return false;
+            for(let ancestor:HTMLElement|null=node;ancestor;ancestor=ancestor.parentElement){
+                if(ancestor.hidden||ancestor.inert||ancestor.getAttribute('aria-hidden')==='true')return false;
+                const style=getComputedStyle(ancestor);
+                if(style.display==='none'||style.visibility==='hidden'||style.visibility==='collapse')return false;
+            }
+            return node.getClientRects().length>0;
+        });
+}
+export function chromeClockNeedsAnchor(now:number,lastAt:number,position:number,lastPosition:number,playing:boolean):boolean {
+    if(!Number.isFinite(position))return false;
+    const expected=lastPosition+(playing?(now-lastAt)/1000:0);
+    return now-lastAt>=2000||Math.abs(position-expected)>.65;
+}
+export function chromeWindowInteraction(phase:'start'|'end') {
+    // Existing chrome auto-hide owns visibility. Native gestures report only their endpoints.
+    window.dispatchEvent(new Event(phase==='start'?'pointerdown':'pointerup'));
+    window.dispatchEvent(new CustomEvent('tingyu-native-chrome-interaction',{detail:{held:phase==='start'}}));
+}

@@ -1,0 +1,77 @@
+import { type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNativePage } from '../../../hooks/useNativePage';
+import {buildRearControlPage,rearEntrySubtitle,type RearSettingsPage} from './rearControlModel';
+import {rearControlActions} from './rearControlActions';
+import type {RearSettingsController} from './useRearSettingsController';
+import type { SettingsNavGroup, SettingsSectionId } from './navigation/settingsNavModel';
+import type { NativePageModel, PageActions, PageSection, PageItem } from '../../../types/nativePages';
+import { nativeLyricsAvailable, openNativeLyricsSettings } from '../../../services/nativeLyrics';
+import { useSettingsModalStore } from '../../../stores/useSettingsModalStore';
+
+// src/components/modal/settings/useNativeSettingsPage.ts
+// Same index groups and rear-display controls as MobileSettingsNavigation / AndroidRearLyricsSetting.
+export function useNativeSettingsPage(root:RefObject<HTMLElement|null>,page:RearSettingsPage|'index',onClose:()=>void,onPage:(page:RearSettingsPage)=>void,
+    groups:SettingsNavGroup[],onSelect:(section:SettingsSectionId)=>void,onHelp:()=>void,rear:RearSettingsController,onBack:()=>void,
+    onDiscovery?:()=>void,onSearch?:()=>void,onAccounts?:()=>void) {
+    const {t}=useTranslation();
+    const actions:PageActions={close:onClose,help:onHelp,...rearControlActions(rear,onPage,onBack)};
+    const sections:PageSection[]=[];
+    if (onAccounts) {
+        actions['settings:accounts'] = onAccounts;
+        sections.push({
+            id: 'accounts-service',
+            title: '账号与服务',
+            layout: 'rows',
+            items: [
+                { id: 'platform-accounts', title: '音乐平台账号', subtitle: '管理各音乐平台的登录状态', action: 'settings:accounts' },
+            ],
+        });
+    }
+    const lyricsItems: PageItem[] = [];
+    if (nativeLyricsAvailable()) {
+        actions['lyrics:desktop'] = () => openNativeLyricsSettings('desktop');
+        actions['lyrics:bluetooth'] = () => openNativeLyricsSettings('bluetooth');
+        lyricsItems.push(
+            {id:'desktop-lyrics',title:t('lyricsOutput.desktop'),subtitle:t('lyricsOutput.desktopHint'),action:'lyrics:desktop'},
+            {id:'bluetooth-lyrics',title:t('lyricsOutput.bluetooth'),subtitle:t('lyricsOutput.bluetoothHint'),action:'lyrics:bluetooth'},
+        );
+    }
+    if (rear.available) {
+        lyricsItems.push({id:'rear-entry',title:t('rearControl.title'),subtitle:rearEntrySubtitle(rear.snapshot,rear.failed,t),action:'rear:open'});
+    }
+    if (lyricsItems.length) {
+        sections.push({id:'lyrics-output',title:'歌词功能',layout:'rows',items:lyricsItems});
+    }
+    const discoveryItems: PageItem[] = [];
+    if(onDiscovery){actions['discovery:settings']=onDiscovery;
+        discoveryItems.push({id:'discovery-settings',title:'推荐设置',subtitle:'推荐来源、探索偏好与内容模块',action:'discovery:settings'});}
+    if(onSearch){actions['search:settings']=onSearch;
+        discoveryItems.push({id:'search-settings',title:t('searchSettings.title'),subtitle:'搜索来源与结果偏好',action:'search:settings'});}
+    if (discoveryItems.length) {
+        sections.push({id:'discovery',title:'音乐发现',layout:'rows',items:discoveryItems});
+    }
+    for(const group of groups){
+        const items:PageItem[]=group.items.map(item=>{actions[`settings:${item.id}`]=()=>onSelect(item.id);
+            return{id:item.id,title:item.label,subtitle:item.description,action:`settings:${item.id}`}});
+        if(group.id==='system')items.push({id:'about',title:t('mobileSettings.about'),subtitle:t('mobileSettings.aboutDescription'),action:'help'});
+        sections.push({id:group.id,title:group.label,layout:'rows',items});
+    }
+    // 「支持与交流」independent group. The sheet copy travels inside section.text (the rows
+    // layout never renders it) so the native Compose sheets share the same i18n source.
+    const supportCopy={coffeeTitle:t('mobileSettings.supportCoffeeSheetTitle'),coffeeDescription:t('mobileSettings.supportCoffeeSheetDescription'),
+        channelWechat:t('mobileSettings.supportChannelWechat'),channelAlipay:t('mobileSettings.supportChannelAlipay'),
+        qrMissing:t('mobileSettings.supportQrMissing'),saveQr:t('mobileSettings.supportSaveQr'),
+        qrSaved:t('mobileSettings.supportQrSaved'),qrSavedAppDir:t('mobileSettings.supportQrSavedAppDir'),
+        qrSaveFailed:t('mobileSettings.supportQrSaveFailed'),voluntary:t('mobileSettings.supportVoluntary'),
+        communityTitle:t('mobileSettings.supportCommunitySheetTitle'),communityDescription:t('mobileSettings.supportCommunitySheetDescription'),
+        groupLabel:t('mobileSettings.supportGroupLabel'),groupMissing:t('mobileSettings.supportGroupMissing'),
+        joinGroup:t('mobileSettings.supportJoinGroup'),copyGroup:t('mobileSettings.supportCopyGroup'),
+        groupCopied:t('mobileSettings.supportGroupCopied'),joinFallback:t('mobileSettings.supportJoinFallback')};
+    sections.push({id:'support',title:t('mobileSettings.supportGroup'),layout:'rows',text:JSON.stringify(supportCopy),items:[
+        {id:'coffee',title:t('mobileSettings.supportCoffee'),subtitle:t('mobileSettings.supportCoffeeDescription'),action:'support:coffee'},
+        {id:'community',title:t('mobileSettings.supportCommunity'),subtitle:t('mobileSettings.supportCommunityDescription'),action:'support:group'},
+    ]});
+    const model:NativePageModel=page==='control'||page==='advanced'?buildRearControlPage(page,rear,t):{key:'settings:index',title:t('ui.settingsNav')==='ui.settingsNav'?'设置':t('ui.settingsNav'),bottomClearance:74,sections};
+    return useNativePage(root,'settings',page!=='guide'&&page!=='diagnostics'&&!page.startsWith('appearance'),model,actions);
+}

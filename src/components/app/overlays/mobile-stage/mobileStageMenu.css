@@ -1,0 +1,59 @@
+/* src/components/app/overlays/mobile-stage/mobileStageMenu.css — loaded by the menu itself. */
+.mps-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 190px;
+    padding: 6px;
+    background: var(--mps-glass);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--mps-border);
+    border-radius: 17px;
+    box-shadow: 0 12px 32px #0004;
+}
+.mps-menu button {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    text-align: left;
+    width: 100%;
+    min-height: 47px;
+    padding: 10px 8px;
+    font-size: 14px;
+    border-radius: 11px;
+}
+.mps-menu button:hover {
+    background: var(--mps-track);
+}
+.mps-menu-label { flex: 1; min-width: 0; }
+.mps-menu-value { font-size: 12px; opacity: 0.65; white-space: nowrap; }
+.mps-menu button > svg { flex: none; }
+
+.mps-menu { max-width: calc(100vw - 32px); max-height: calc(100dvh - 140px); overflow-y: auto; color: var(--mps-ink); pointer-events: auto; z-index: 10; }
+.mps-menu button { color: inherit; background: transparent; border: 0; cursor: pointer; }
+.mps-menu button:focus-visible { outline: 2px solid var(--mps-accent); outline-offset: -2px; }
+.mps-menu button:hover { background: var(--mps-track); }
+
+/* 第 15 轮：开合动画与 Compose 极简菜单同一节奏。
+   打开 160ms：轻微下移（-8px → 0）+ 透明度 0→1 + 缩放 0.97→1；
+   关闭 120ms：反向淡出。条目按压反馈与 Compose 侧同一语言（淡墨底）。 */
+.mps-menu {
+    animation: mps-menu-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    transform-origin: top right;
+}
+.mps-menu--closing {
+    animation: mps-menu-out 120ms cubic-bezier(0.42, 0, 0.74, 0.3) both;
+    pointer-events: none;
+}
+.mps-menu button:active { background: var(--mps-track); }
+@keyframes mps-menu-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes mps-menu-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(-8px) scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mps-menu, .mps-menu--closing { animation: none; }
+}

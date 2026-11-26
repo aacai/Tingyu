@@ -1,0 +1,15 @@
+import { COMPOSE_CHROME, PREHIDE_COMPOSE_CHROME, composeChromeCapabilities, chromeNative } from './nativeChrome';
+
+// src/services/nativePages.ts
+export const nativePages = chromeNative;
+export const NATIVE_FIRST=PREHIDE_COMPOSE_CHROME;
+if(NATIVE_FIRST)document.documentElement.dataset.nativeFirst='true';
+let capability: Promise<boolean> | undefined;
+export function canUseNativePages(): Promise<boolean> {
+    if (!COMPOSE_CHROME) return Promise.resolve(false);
+    return capability ??= composeChromeCapabilities().then(value => value.supported && value.pages === true).catch(() => false);
+}
+export function absolutePageImage(url: string | null | undefined): string {
+    if (!url) return '';
+    try { return new URL(url, typeof location === 'undefined' ? 'https://localhost/' : location.href).href; } catch { return ''; }
+}

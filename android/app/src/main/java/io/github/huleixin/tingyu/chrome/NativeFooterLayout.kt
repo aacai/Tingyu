@@ -1,0 +1,136 @@
+package io.github.huleixin.tingyu.chrome
+
+// android/app/src/main/java/io/github/huleixin/tingyu/chrome/NativeFooterLayout.kt
+// Footer placement is route state, never a measured pose of an invisible HTML animation.
+// `detail` = 集合详情（非歌手）按页面层级判定：隐藏一级导航、迷你条上提；宽屏（≥840dp）保留侧边导航。
+//
+// 2026-11-09 一级页面底部行为统一（场景见 听屿1.3.188-底部导航与迷你条统一.md）：
+//   推荐 / 资料库 / 搜索 → 导航 + 迷你条都在
+//   设置主页            → 只有导航（迷你条退场，但播放不中断）
+//   歌单详情（非歌手）   → 只有迷你条
+//   设置二/三级、舞台     → 都不显示
+// 这里只回答「这个路由**允许**画哪一条」。设置页用原生已提交的 pageTarget 判断层级，
+// 避免 JS 清理/effect 时序漏掉二级页，或在返回时多发一帧底栏。
+internal data class NativeFooterRoute(val route:String="home",val detail:Boolean=false,val artist:Boolean=false) {
+    // 播放器/设置壳不携带来源页层级；只在真实浏览路由提交时替换快照。
+    fun follow(route:String,detail:Boolean,pageTarget:String):NativeFooterRoute =
+        if(route in setOf("home","collection","search"))
+            NativeFooterRoute(route,detail,pageTarget.startsWith("collection:artist:")) else this
+}
+
+internal object NativeFooterLayout {
+    fun bottomBar(id:String,width:Float)=id!="nav"||width<840f
+    // IME covers bottom controls, but a Pad's vertical navigation remains usable above it.
+    fun imeHides(id:String,width:Float,imeVisible:Boolean):Boolean =
+        imeVisible && id!="stage" && !(id=="nav"&&width>=840f)
+    const val SettingsDepthExitMs = 220
+    const val SettingsDepthOffsetDp = 14f
+    const val FooterExitMs = 220
+    const val FooterEnterMs = 250
+    const val NavSlideOffsetDp = 20f
+    const val MiniSlideOffsetDp = 14f
+
+    // 舞台下的迷你条已透明，进入设置时不能把它恢复成一条可见的退场动画。
+    fun miniPresenceAlpha(route:String,presence:Float,settingsFromStage:Boolean):Float =
+        if(route=="settings"&&settingsFromStage)0f else presence
+
+    fun settingsRoot(route:String,pageTarget:String,requested:Boolean=true):Boolean = requested&&route=="settings"&&pageTarget=="settings:index"
+
+    /**
+     * 维护跨二级页与播放器的真实一级导航归属（0=推荐, 1=资料库, 2=搜索, 3=设置）：
+     * - 进入完整播放器（stage）或 Web 覆盖层时不篡改前序一级 Tab；
+     * - 从搜索页进入集合详情时保留搜索归属（2），从推荐/资料库进入集合详情时归属 0/1。
+     */
+    fun nextPrimaryTab(route: String, selectedTab: Int, previousPrimaryTab: Int): Int = when (route) {
+        "home" -> selectedTab.coerceIn(0, 1)
+        "search" -> 2
+        "settings" -> 3
+        "collection" -> if (previousPrimaryTab == 2) 2 else selectedTab.coerceIn(0, 1)
+        else -> previousPrimaryTab.coerceIn(0, 3)
+    }
+
+    fun navSelection(
+        destination: String,
+        browsingRoute: String,
+        primaryTab: Int,
+        selectedTab: Int,
+        startupSelected: Int? = null,
+    ): Int = startupSelected ?: when (destination) {
+        "home" -> selectedTab.coerceIn(0, 1)
+        "search" -> 2
+        "settings" -> 3
+        "collection" -> if (primaryTab == 2) 2 else selectedTab.coerceIn(0, 1)
+        else -> when (browsingRoute) {
+            "search" -> 2
+            "home" -> selectedTab.coerceIn(0, 1)
+            else -> if (primaryTab == 2) 2 else selectedTab.coerceIn(0, 1)
+        }
+    }
+
+    /**
+     * 底栏目标可见性（含进入/退出播放页、歌单详情、歌手页及设置页的连续过渡态）。
+     * 进入播放页时底栏立即退场；从播放页收起（stageExiting）时按返回目标路由提前进场。
+     */
+    fun targetVisible(
+        id: String,
+        route: String,
+        returningRoute: String = route,
+        pendingStageEntry: Boolean = false,
+        stageExiting: Boolean = false,
+        detail: Boolean = false,
+        width: Float = 393f,
+        artist: Boolean = false,
+        settingsRoot: Boolean = true,
+        webOverlay: Boolean = false,
+        imeHidden: Boolean = false,
+    ): Boolean = when {
+        webOverlay -> false
+        imeHides(id,width,imeHidden) -> false
+        id == "stage" -> route == "stage" && !pendingStageEntry
+        id == "nav" -> when {
+            pendingStageEntry || (route == "stage" && !stageExiting) -> false
+            route == "stage" && stageExiting -> visible("nav", returningRoute, detail, width, artist = artist, settingsRoot = settingsRoot)
+            else -> visible("nav", route, detail, width, artist = artist, settingsRoot = settingsRoot)
+        }
+        else -> when {
+            route == "stage" || pendingStageEntry -> visible("mini", returningRoute, detail, width, artist = artist, settingsRoot = settingsRoot)
+            else -> visible("mini", route, detail, width, artist = artist, settingsRoot = settingsRoot)
+        }
+    }
+
+    fun visible(id:String,route:String,detail:Boolean,width:Float,artist:Boolean=false,settingsRoot:Boolean=true):Boolean = when {
+        route=="collection"&&artist -> false
+        else -> when(id){
+        "stage"->route=="stage"
+        "nav"->when(route){
+            "home"->true
+            "collection"->!detail||width>=840f
+            "search"->true
+            "settings"->settingsRoot
+            else->false
+        }
+        // 设置页不显示迷你条；歌单详情反而保留它。
+        else->route in setOf("home","collection","search")||width>=840f&&route=="settings"&&settingsRoot
+    }
+    }
+    fun rect(id:String,width:Float,height:Float,top:Float,bottom:Float,detail:Boolean):ChromeRect {
+        val wide=width>=840f;val short=wide&&height<=600f
+        if(id=="stage"){
+            // 舞台播放胶囊：与首页迷你播放器同一条安全边距（手机左右各 10dp），
+            // 平板按迷你条宽度收窄并居中。高度 96dp = 14 padding + 46 控制行 + 6 间隙 + 30 进度区。
+            // 横屏手机也限宽居中，让五个播放按钮仍在单手可触及的范围内。
+            val stageWidth=when {
+                width>height -> minOf(width-20f,430f)
+                wide -> minOf(width-148f,600f)
+                else -> width-20f
+            }
+            val stageHeight=96f
+            return ChromeRect((width-stageWidth)/2,height-stageHeight-bottom-10f,stageWidth,stageHeight,1f)
+        }
+        return if(id=="nav"){
+            if(wide)ChromeRect(if(short)8f else 12f,16f+top,80f,height-32f-top,1f)
+            else ChromeRect(10f,height-62f-bottom,width-20f,54f,1f)
+        }else if(wide)ChromeRect(if(short)108f else 116f,height-76f-bottom,width-(if(short)128f else 148f),62f,1f)
+        else ChromeRect(10f,height-(if(detail)54f else 114f)-bottom,width-20f,46f,1f)
+    }
+}

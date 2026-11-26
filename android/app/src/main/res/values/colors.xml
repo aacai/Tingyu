@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 原 foliaWindowBackground(#09090B) 已删除：它是冷启动黑窗的颜色来源。
+         窗口/启动图底色统一走 @color/interfaceLaunchBackground（values #F4F5EE /
+         values-night #102D25，= 原生首页渐变首色），由 chrome/LaunchSurface.kt 保持同步。 -->
+</resources>

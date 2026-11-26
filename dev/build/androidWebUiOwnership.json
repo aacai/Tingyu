@@ -1,0 +1,112 @@
+{
+  "$comment": "Android 页面归属检查配置。规则说明见 docs/ANDROID-PAGE-OWNERSHIP.md。修改本文件等于修改架构约束，需要同步更新文档。",
+  "version": 1,
+  "invariants": [
+    {
+      "id": "prehide-derived",
+      "file": "src/services/nativeChrome.ts",
+      "mustContain": "export const PREHIDE_COMPOSE_CHROME = COMPOSE_CHROME && isAndroidNativeRuntime();",
+      "why": "PREHIDE 必须是 Android 运行时派生，否则旧 chrome DOM 会复活"
+    },
+    {
+      "id": "home-compile-time-gate",
+      "file": "src/library/suites/mobile/MobileHome.tsx",
+      "mustContain": "{!NATIVE_FIRST&&<>",
+      "mustNotContain": "!nativeReady&&",
+      "why": "首页旧 DOM 在 Android 上必须编译期剔除（唯一 UI = NativeHomePage）"
+    },
+    {
+      "id": "native-first-derived",
+      "file": "src/services/nativePages.ts",
+      "mustContain": "export const NATIVE_FIRST=PREHIDE_COMPOSE_CHROME;",
+      "why": "NATIVE_FIRST 必须继续派生自 PREHIDE，不能在运行时被改成 false"
+    },
+    {
+      "id": "settings-document-root-kept",
+      "file": "src/hooks/useNativeSettingsDocument.ts",
+      "mustContain": "element.dataset.nativeDocumentRoot='true'",
+      "why": "设置表单保留 React 状态与业务事件宿主，布局仅由 Compose 决定"
+    },
+    {
+      "id": "no-forced-ready",
+      "file": "src/hooks/useNativePage.ts",
+      "mustNotContain": "setReady(NATIVE_FIRST||value)",
+      "why": "禁止用 NATIVE_FIRST 把 ready 钉成 true（假装接管成功）"
+    },
+    {
+      "id": "queue-host-channel",
+      "file": "android/app/src/main/java/io/github/huleixin/tingyu/chrome/ComposeChromeHost.kt",
+      "mustContain": "queueCommands.queuePlay(it)",
+      "mustNotContain": "minimalCommands.queuePlay",
+      "why": "原生播放队列必须走宿主级命令通道，不能依赖极简页桥帧是否新鲜（bridgeLive）"
+    },
+    {
+      "id": "search-overlay-autofocus",
+      "file": "android/app/src/main/java/io/github/huleixin/tingyu/chrome/NativeSearchOverlay.kt",
+      "mustContain": "autoFocus = visible",
+      "mustNotContain": "autoFocus = true",
+      "why": "搜索固定层常驻组合：无条件 autoFocus 会让进入页面就弹出输入法（68602 回归）"
+    },
+    {
+      "id": "panel-channel-host",
+      "file": "android/app/src/main/java/io/github/huleixin/tingyu/chrome/ComposeChromeHost.kt",
+      "mustContain": "TyPanelLayer(panelHost,interfaceLight",
+      "why": "二级操作面板必须由宿主统一挂载（全屏浮层，盖住底栏/迷你条/极简页）"
+    },
+    {
+      "id": "panel-native-first-ownership",
+      "file": "src/components/shared/OperationPanel.tsx",
+      "mustContain": "canUseNativePanels()",
+      "why": "面板渲染必须由能力位决定，禁止写死原生或写死 DOM"
+    },
+    {
+      "id": "collection-menu-no-dom-sheet",
+      "file": "src/library/suites/mobile/MobileCollectionMenu.tsx",
+      "mustNotContain": "MobileSheet",
+      "why": "歌单/歌曲二级操作已原生：模型交给 OperationPanel，不得再自己 portal 一层 .ml-sheet"
+    },
+    {
+      "id": "source-sheet-no-dom-sheet",
+      "file": "src/library/suites/mobile/MobileHomeSources.tsx",
+      "mustNotContain": "MobileSheet",
+      "why": "音源选择已原生：同上"
+    },
+    {
+      "id": "settings-flow-no-measurement",
+      "file": "android/app/src/main/java/io/github/huleixin/tingyu/chrome/NativePageView.kt",
+      "mustContain": "page.document?.flow!=null -> SettingsFlowPage",
+      "why": "语义化设置页必须是页面路由的第一分支：自带底色/顶栏/排版，不消费任何 DOM 矩形"
+    },
+    {
+      "id": "settings-semantic-source-no-geometry",
+      "file": "src/services/nativeSettingsSemantic.ts",
+      "mustContain": "paints: [], controls: [], areas: [], live: [], flow",
+      "mustNotContain": ".getBoundingClientRect(",
+      "why": "所有设置二三级页只投影表单语义，不得重新测量 DOM 控件坐标"
+    },
+    {
+      "id": "settings-hook-no-measured-capture",
+      "file": "src/hooks/useNativeSettingsDocument.ts",
+      "mustContain": "captureSemanticSettings(element,key,title)",
+      "mustNotContain": "captureSettingsDocument(",
+      "why": "实际设置路由只生成语义化模型，历史显示列表仅兼容读取"
+    },
+    {
+      "id": "settings-flow-skips-measurement",
+      "file": "src/hooks/useNativeSettingsDocument.ts",
+      "mustContain": "if(hasFlow){",
+      "why": "有 flow 的分区不得启动 captureSettingsDocument（否则又回到 DOM 测量）"
+    }
+  ],
+  "webviewAllowlist": [
+    "src/components/app/overlays/minimal-stage/MinimalStage.tsx",
+    "src/components/app/overlays/mobile-stage/MobileStageChrome.tsx",
+    "src/components/modal/SettingsModal.tsx",
+    "src/components/modal/settings/MobileSettingsLanding.tsx",
+    "src/components/shared/MobileSheet.tsx",
+    "src/App.tsx",
+    "src/components/shared/OperationPanel.tsx",
+    "src/library/suites/mobile/native/NativeLocalLibrary.tsx",
+    "index.html"
+  ]
+}

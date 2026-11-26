@@ -1,0 +1,67 @@
+package io.github.huleixin.tingyu.chrome
+
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+
+// android/app/src/test/java/io/github/huleixin/tingyu/chrome/NativeCatalogAudioSpecsTest.kt
+class NativeCatalogAudioSpecsTest {
+    @Test fun compactScreensAndLargeFontsKeepRoomForTheArtistAndDuration() {
+        assertEquals(2,catalogBadgeLimit(320,1f))
+        assertEquals(2,catalogBadgeLimit(393,1.5f))
+        assertEquals(3,catalogBadgeLimit(393,1f))
+    }
+    @Test fun qualityVersionAndPermissionRemainIndependentAndOrdered() {
+        assertEquals(listOf("master", "dolby", "vip"),
+            catalogBadges(listOf("vip", "high", "lossless", "dolby", "hires", "master")).map { it.spec })
+        assertEquals(listOf("Hi-Res", "DTS", "付费"),
+            catalogBadges(listOf("paid", "dts", "hires", "hires")).map { it.label })
+        assertEquals("母带", catalogBadges(listOf("master")).single().label)
+    }
+    @Test fun unknownSpecsDoNotConsumeSlotsOrInventQuality() {
+        assertTrue(catalogBadges(listOf("unknown", "DTS:X")).isEmpty())
+        assertEquals(listOf("dts", "vip"), catalogBadges(listOf("dts", "vip")).map { it.spec })
+        assertEquals(listOf("lossless", "vip"), catalogBadges(listOf("lossless", "vip")).map { it.spec })
+    }
+    @Test fun neteaseVersionsRemainDistinctFromDolbyAndDts() {
+        assertEquals(listOf("高清臻音"), catalogBadges(listOf("jyeffect")).map { it.label })
+        assertEquals(listOf("沉浸环绕"), catalogBadges(listOf("sky")).map { it.label })
+        assertEquals(listOf("hires", "sky", "vip"), catalogBadges(listOf("hires", "sky", "vip")).map { it.spec })
+    }
+    private fun parse(item:JSONObject):NativePageItem = NativePage.parse(JSONObject().put("id","collection").put("session","specs").put("viewportWidth",393)
+        .put("model",JSONObject().put("key","collection:specs").put("sections",JSONArray().put(JSONObject().put("id","tracks").put("layout","rows").put("total",1)
+            .put("items",JSONArray().put(item)))))).sections.single().items.single()
+    @Test fun boundedBadgesAndTheirMeaningSurviveTheNativePageContract() {
+        val item=parse(JSONObject().put("id","track").put("audioSpecs",JSONArray(listOf("hires","dolby","vip"))).put("audioSpecsLabel","平台标注规格，不代表当前播放音质"))
+        assertEquals(listOf("hires","dolby","vip"),item.audioSpecs)
+        assertTrue(item.audioSpecsLabel.contains("不代表"))
+    }
+    @Test fun parsingIsBoundedWithoutTruncatingThePermissionBeforeSelection() {
+        val tokens = listOf("high", "lossless", "hires", "master", "dolby", "dts", "vip", "paid", "ignored")
+        val item = parse(JSONObject().put("id", "track").put("audioSpecs", JSONArray(tokens)))
+        assertEquals(tokens.take(8), item.audioSpecs)
+        assertEquals(listOf("master", "dolby", "vip"), catalogBadges(item.audioSpecs).map { it.spec })
+    }
+    @Test fun oldCachedPagesAndMalformedArraysDoNotInventBadges() {
+        assertTrue(parse(JSONObject().put("id","old")).audioSpecs.isEmpty())
+        assertTrue(parse(JSONObject().put("id","invalid").put("audioSpecs",JSONArray().put(JSONObject.NULL).put(123))).audioSpecs.isEmpty())
+    }
+    @Test fun updatingTheSameTrackRefreshesItsBadgesWithoutInvalidatingItsRowIdentity() {
+        val item=parse(JSONObject().put("id","track").put("audioSpecs",JSONArray(listOf("无损"))))
+        val section=NativePageSection("tracks","","rows",listOf(item),"","","","","","","",false,1,0,"")
+        val rows=NativeRowsCache();rows.accept(section)
+        val updated=item.copy(audioSpecs=listOf("Hi-Res"))
+        rows.accept(section.copy(items=listOf(updated)))
+        assertEquals(listOf("Hi-Res"),rows.get(section.copy(items=emptyList(),offset=100),0)?.audioSpecs)
+        assertEquals("track",updated.id)
+    }
+    @Test fun cachedAudioStateParsesAndRefreshesWithoutChangingSongIdentity(){
+        val item=parse(JSONObject().put("id","track").put("audioCached",true).put("audioCachedLabel","已缓存"))
+        assertTrue(item.audioCached);assertEquals("已缓存",item.audioCachedLabel)
+        val section=NativePageSection("tracks","","rows",listOf(item),"","","","","","","",false,1,0,"")
+        val rows=NativeRowsCache();rows.accept(section);rows.accept(section.copy(items=listOf(item.copy(audioCached=false))))
+        assertFalse(rows.get(section.copy(items=emptyList(),offset=100),0)!!.audioCached);assertEquals("track",rows.get(section.copy(items=emptyList(),offset=100),0)!!.id)
+    }
+
+}

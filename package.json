@@ -14,6 +14,7 @@
   "motionTestRevision": 1,
   "license": "AGPL-3.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "engines": {
     "node": ">=24.0.0"
   },
@@ -62,7 +63,9 @@
     "check:android-ui": "vitest run test/unit/architecture/androidPageOwnership.test.ts",
     "theme:generate": "node dev/build/generateInterfaceThemes.mjs",
     "theme:check": "node dev/build/generateInterfaceThemes.mjs --check",
-    "audit:motion": "node dev/build/auditLiquidMotion.mjs"
+    "audit:motion": "node dev/build/auditLiquidMotion.mjs",
+    "build:desktop": "ELECTRON=true npm run build && electron-builder --mac dmg",
+    "dev:electron": "sh -c 'ELECTRON=true vite --host 127.0.0.1 --port 3000 --strictPort & VITE_PID=$!; trap \"kill $VITE_PID 2>/dev/null || true\" EXIT; for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000 >/dev/null && break; sleep 1; done; TINGYU_DESKTOP_DEV=true electron .'"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
@@ -110,6 +113,8 @@
     "buffer": "^6.0.3",
     "cross-env": "^10.1.0",
     "dexie": "^4.4.6",
+    "electron": "^43.8.13",
+    "electron-builder": "^26.18.0",
     "fake-indexeddb": "^6.2.5",
     "framer-motion": "^13.4.3",
     "i18next": "^26.4.2",
@@ -147,6 +152,25 @@
     "qs": "6.16.0",
     "three-stdlib": {
       "fflate": "$fflate"
+    }
+  },
+  "build": {
+    "appId": "io.github.huleixin.tingyu.desktop",
+    "productName": "Tingyu",
+    "asar": true,
+    "directories": {
+      "output": "release-desktop"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [
+        "dmg"
+      ]
     }
   }
 }

@@ -1,0 +1,113 @@
+name: Build artifacts
+
+# 同一次触发、同一 package.json 版本产出 arm64 APK + arm64/x64 macOS DMG。
+# Android 签名来自 Actions Secrets：KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD。
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: build-artifacts-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android-arm64:
+    name: Android arm64 APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Prepare signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          : "${KEYSTORE_BASE64:?missing KEYSTORE_BASE64}"
+          : "${KEYSTORE_PASSWORD:?missing KEYSTORE_PASSWORD}"
+          : "${KEY_ALIAS:?missing KEY_ALIAS}"
+          : "${KEY_PASSWORD:?missing KEY_PASSWORD}"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/release.jks
+          cat > android/keystore.properties <<EOF
+          storeFile=$GITHUB_WORKSPACE/android/release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+      - name: Sync Capacitor assets
+        run: npm run cap:sync:android
+      - name: Build signed debug and release APKs
+        run: |
+          chmod +x android/gradlew
+          bash ./android/gradlew -p android -PtingyuArm64Only=true --no-daemon :app:assembleDebug :app:assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64-apks
+          path: android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
+  desktop-arm64:
+    name: macOS arm64 DMG
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build web assets
+        run: ELECTRON=true npm run build
+      - name: Package DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac dmg --arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-dmg
+          path: |
+            release-desktop/*.dmg
+            release-desktop/*.dmg.blockmap
+          if-no-files-found: error
+
+  desktop-x64:
+    name: macOS x64 DMG
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build web assets
+        run: ELECTRON=true npm run build
+      - name: Package DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac dmg --x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64-dmg
+          path: |
+            release-desktop/*.dmg
+            release-desktop/*.dmg.blockmap
+          if-no-files-found: error

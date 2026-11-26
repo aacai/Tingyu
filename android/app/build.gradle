@@ -41,9 +41,18 @@ def hasReleaseKeystore = keystorePropertiesFile.exists()
 if (hasReleaseKeystore) {
     keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
 }
+def arm64Only = project.findProperty('tingyuArm64Only') == 'true'
 
 android {
     namespace = "io.github.huleixin.tingyu"
+    splits {
+        abi {
+            enable arm64Only
+            reset()
+            include 'arm64-v8a'
+            universalApk false
+        }
+    }
     compileSdk {
         version = release(36) {
             minorApiLevel = 1

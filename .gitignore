@@ -15,6 +15,7 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 .idea
 .DS_Store
 *.suo
@@ -98,3 +99,5 @@ $null
 feedback-server/.wrangler/
 feedback-server/.dev.vars*
 .tmp-*/
+# Electron local packaging output
+release-desktop/

@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build debug apk and install",
+      "type": "shell",
+      "command": "export NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://127.0.0.1:10808 HTTPS_PROXY=http://127.0.0.1:10808 ALL_PROXY=http://127.0.0.1:10808; npm run cap:sync:android && JAVA_HOME=\"${workspaceFolder}/.tmp-jdk21/Contents/Home\" ANDROID_HOME=\"$HOME/Library/Android/sdk\" ANDROID_SDK_ROOT=\"$HOME/Library/Android/sdk\" sh ./android/gradlew -p ./android :app:assembleDebug && adb install -r -d ./android/app/build/outputs/apk/debug/app-debug.apk",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Desktop run",
+      "type": "shell",
+      "command": "npm run dev:electron",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ELECTRON_MIRROR": "https://npmmirror.com/mirrors/electron/"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

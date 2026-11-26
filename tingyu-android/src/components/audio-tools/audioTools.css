@@ -113,6 +113,14 @@
 .ty-lx-order-row>span { flex:1; color:var(--lx-ink); font-size:11px; }
 .ty-lx-order-row>small { color:var(--lx-muted); font-size:9px; }
 .ty-lx-order-row>button { min-height:32px; padding:4px 8px; border:1px solid var(--lx-border); border-radius:7px; background:transparent; color:var(--lx-muted); font-size:10px; }
+.ty-lx-fallback-config { display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--lx-border); border-radius:12px; }
+.ty-lx-fallback-config>h3 { margin:0; color:var(--lx-ink); font-size:12px; font-weight:600; }
+.ty-lx-fallback-config>label { display:flex; flex-direction:column; gap:5px; color:var(--lx-muted); font-size:11px; }
+.ty-lx-fallback-config :is(input,textarea) { width:100%; padding:8px 10px; border:1px solid var(--lx-border); border-radius:9px; background:var(--lx-card); color:var(--lx-ink); font:inherit; font-size:11px; outline:none; }
+.ty-lx-fallback-config textarea { min-height:80px; resize:vertical; }
+.ty-lx-fallback-config :is(input,textarea):focus-visible { outline:2px solid var(--lx-accent); outline-offset:2px; }
+.ty-lx-fallback-config>button { min-height:36px; padding:6px 12px; border:1px solid var(--lx-border); border-radius:9px; background:var(--lx-card); color:var(--lx-accent); font-size:11px; }
+.ty-lx-fallback-config>p { margin:0; color:var(--lx-muted); font-size:10px; line-height:1.6; }
 .ty-lx-diagnostic-action { min-height:42px; padding:9px 12px; border:1px solid var(--lx-border)!important; border-radius:10px!important; background:var(--lx-card)!important; color:var(--lx-muted)!important; text-align:left; }
 .ty-lx-card[data-selected] { box-shadow:0 0 0 1px color-mix(in srgb,var(--lx-accent) 38%,transparent); }
 .ty-lx-version-ready { color:var(--lx-muted); font-size:10px; align-self:center; }

@@ -76,6 +76,7 @@ class UpdateManager private constructor(private val appContext: Context) {
                 manifest = persisted.manifest,
                 nowMs = now,
                 lastVerifiedAtMs = persisted.verifiedAtMs,
+                allowForceUpdate = false,
             )
             val showDialog = when (decision.mode) {
                 UpdateDecisionMode.FORCE_UPDATE -> true
@@ -202,6 +203,7 @@ class UpdateManager private constructor(private val appContext: Context) {
                         manifest = manifest,
                         nowMs = now,
                         lastVerifiedAtMs = now,
+                        allowForceUpdate = false,
                     )
                     val shouldOpenDialog = when (decision.mode) {
                         UpdateDecisionMode.FORCE_UPDATE -> true
@@ -241,7 +243,9 @@ class UpdateManager private constructor(private val appContext: Context) {
                     // 网络失败或无合法签名配置：绝不误判为强制更新，也绝不在手动检查时谎报“已是最新版本”
                     val cached = store.loadVerifiedPolicy(channel)
                     val fallbackDecision = if (cached != null) {
-                        UpdatePolicy.evaluateDecision(currentVersionCode, cached.manifest, now, cached.verifiedAtMs)
+                        UpdatePolicy.evaluateDecision(
+                            currentVersionCode, cached.manifest, now, cached.verifiedAtMs, allowForceUpdate = false,
+                        )
                     } else {
                         UpdateDecision(UpdateDecisionMode.NONE, "check_failed")
                     }

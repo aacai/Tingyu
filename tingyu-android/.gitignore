@@ -97,3 +97,9 @@ $null
 .release-work/
 feedback-server/.wrangler/
 feedback-server/.dev.vars*
+.tmp-*/
+# 本地签名凭据不入库；CI 用 Actions Secrets 注入
+keystore.properties
+*.jks
+*.keystore
+**/signing.properties

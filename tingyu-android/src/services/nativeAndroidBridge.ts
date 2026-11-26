@@ -55,6 +55,8 @@ const API_HOSTS = [
   'api.tencentmusic.com',
   // Qishui QR/session APIs and public scene artwork.
   'qishui.com', 'douyin.com', 'snssdk.com', 'douyinpic.com',
+  // GD 音乐台聚合解析：WebView 直连会被 CORS 挡掉，交给原生 OkHttp 代理。
+  'gdstudio.xyz',
 ];
 
 type NativePlugin = {
@@ -105,6 +107,13 @@ const base64ToBytes = (value?: string): Uint8Array => {
 };
 
 /** True when a request must go through the native OkHttp proxy instead of the WebView's fetch. */
+/** 用户配置的自定义 API 主机也要走 OkHttp，否则 Android WebView 会被 CORS 挡掉。 */
+export const registerBridgedApiHost = (host: string): void => {
+  const normalized = host.trim().toLowerCase().replace(/^www\./, '');
+  if (!/^[a-z0-9.-]+$/.test(normalized) || normalized.length > 253) return;
+  if (!API_HOSTS.includes(normalized)) API_HOSTS.push(normalized);
+};
+
 export const isBridgedApiUrl = (url: string): boolean => (
   resolveBridgedRequestUrl(url) !== null
 );

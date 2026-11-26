@@ -45,6 +45,21 @@ describe('cross-platform resolution', () => {
         expect(original.sourceRef).toMatchObject({ providerId: 'qq', mediaId: '123' });
         expect(resolvedAudioCacheKey(original, source.url)).toBeNull();
     });
+    it('uses a resolver-only backup without rewriting catalog identity', async () => {
+        vi.mocked(omni.getProviderSummaries).mockReturnValue([
+            { providerId: 'pyncmd', availability: { configured: true } },
+        ] as ReturnType<typeof omni.getProviderSummaries>);
+        vi.mocked(omni.getProviderCapabilities).mockReturnValue({ search: false, playback: true } as ReturnType<typeof omni.getProviderCapabilities>);
+        vi.spyOn(omni, 'getProviderAudioSource').mockResolvedValue(source);
+        vi.spyOn(omni, 'searchProviderSongs');
+
+        const original = song();
+        const result = await resolvePlaybackFallback(original, 'high');
+        expect(result?.backupSource).toEqual({ providerId: 'pyncmd', mediaId: '123' });
+        expect(omni.searchProviderSongs).not.toHaveBeenCalled();
+        expect(original.sourceRef).toMatchObject({ providerId: 'qq', mediaId: '123' });
+    });
+
     it('never searches when the primary source works', async () => {
         vi.spyOn(omni, 'getPrimaryAudioSource').mockResolvedValue(source);
         expect(await omni.getAudioSource(song(), 'high')).toBe(source);

@@ -133,8 +133,10 @@ class UpdateSystemTest {
         assertEquals(UpdateDecisionMode.NONE, UpdatePolicy.evaluateDecision(300L, optionalManifest, baseNow).mode)
         // 普通更新 (current = 293 >= min 290, < latest 300)
         assertEquals(UpdateDecisionMode.OPTIONAL_UPDATE, UpdatePolicy.evaluateDecision(293L, optionalManifest, baseNow).mode)
-        // 强制更新 (current = 285 < min 290)
-        assertEquals(UpdateDecisionMode.FORCE_UPDATE, UpdatePolicy.evaluateDecision(285L, optionalManifest, baseNow).mode)
+        // 协议层强制更新判定仍保留 (current = 285 < min 290)
+        assertEquals(UpdateDecisionMode.FORCE_UPDATE, UpdatePolicy.evaluateDecision(285L, optionalManifest, baseNow, allowForceUpdate = true).mode)
+        // 客户端默认关闭强制更新：保留可取消的普通提醒，不锁死播放器
+        assertEquals(UpdateDecisionMode.OPTIONAL_UPDATE, UpdatePolicy.evaluateDecision(285L, optionalManifest, baseNow).mode)
 
         // 暂停推送 (pause)：普通更新停止弹窗推送
         val pausedJson = buildSignedManifestJson(policyAction = "pause", latestVersionCode = 300L, minSupportedVersionCode = 290L)
@@ -214,7 +216,7 @@ class UpdateSystemTest {
         val after24h = baseNow + 24L * 3600_000L
         assertEquals(
             UpdateDecisionMode.FORCE_UPDATE,
-            UpdatePolicy.evaluateDecision(293L, manifest, nowMs = after24h, lastVerifiedAtMs = baseNow).mode,
+            UpdatePolicy.evaluateDecision(293L, manifest, nowMs = after24h, lastVerifiedAtMs = baseNow, allowForceUpdate = true).mode,
         )
 
         // 离线超过 48 小时宽限期（如纯离线本地音乐设备）：自动降级为普通提醒，不锁死用户

@@ -60,6 +60,15 @@ if("catalog".equals(action))jobs.catalog(d);if("enqueue".equals(action))jobs.enq
         call.resolve(new JSObject().put("uri",android.net.Uri.fromFile(audioStaging().finish(call.getString("token",""))).toString()));
     }catch(Exception error){call.reject("Audio cache incomplete");}});}
     @PluginMethod public void audioCacheRelease(PluginCall call){AUDIO_CACHE_IO.execute(()->{try{audioStaging().release(call.getString("token",""));call.resolve();}catch(Exception error){call.reject("Audio cache release failed");}});}
+    private static final java.util.concurrent.ExecutorService MUSIC_DOWNLOAD_IO=java.util.concurrent.Executors.newSingleThreadExecutor(r->new Thread(r,"tingyu-music-download"));
+    @PluginMethod public void downloadToMusic(PluginCall call){
+        String url=call.getString("url",""),fileName=call.getString("fileName","");
+        MUSIC_DOWNLOAD_IO.execute(()->{try{
+            call.resolve(MusicFileDownloader.download(getContext(),url,fileName));
+        }catch(Exception error){
+            call.reject(error.getMessage()==null?"音乐下载失败":error.getMessage());
+        }});
+    }
     // Native audio passed device validation in the 1.3.24 test builds; the empty-buffer fix in
     // PlaybackSpectrumProcessor is what made it playable. The flag stays overridable so a build
     // can still ship WebView-only audio.

@@ -10,13 +10,18 @@ import { getProviderPlaybackCooldown } from '../playbackRecovery/providerPlaybac
 // song. Exact normalized title (including version markers), artist set and duration are required.
 export const normalizeRecordingText = (value: string): string => value.normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
 
-export function matchesPlaybackRecording(original: SongResult, candidate: SongResult): boolean {
+export function matchesPlaybackIdentity(original: SongResult, candidate: SongResult): boolean {
     const a = createProviderSongMetadata(original), b = createProviderSongMetadata(candidate);
     const artists = (data: typeof a) => new Set(data.artists.map(artist => normalizeRecordingText(artist.name)).filter(Boolean));
     const left = artists(a), right = artists(b);
     const title = normalizeRecordingText(original.name);
     return !!title && title === normalizeRecordingText(candidate.name)
-        && left.size > 0 && left.size === right.size && [...left].every(name => right.has(name))
+        && left.size > 0 && left.size === right.size && [...left].every(name => right.has(name));
+}
+
+export function matchesPlaybackRecording(original: SongResult, candidate: SongResult): boolean {
+    const a = createProviderSongMetadata(original), b = createProviderSongMetadata(candidate);
+    return matchesPlaybackIdentity(original, candidate)
         && a.durationMs > 0 && b.durationMs > 0 && Math.abs(a.durationMs - b.durationMs) <= Math.min(5000, a.durationMs * .03);
 }
 
@@ -26,6 +31,9 @@ export function playbackUrlIdentity(url: string): string {
         return /^https?:$/.test(parsed.protocol) ? parsed.origin + parsed.pathname : url;
     } catch { return url; }
 }
+
+const FALLBACK_PROVIDER_IDS = ['qq', 'netease', 'kugou', 'bodian', 'qishui', 'gdmusic', 'pyncmd', 'customApi'] as const;
+const RESOLVER_ONLY_PROVIDER_IDS = new Set(['pyncmd', 'customApi']);
 
 export interface PlaybackSourceOptions {
     isCurrent?: () => boolean;
@@ -45,13 +53,14 @@ async function bounded<T>(work: Promise<T>, ms: number, controller?: AbortContro
 
 export async function resolvePlaybackFallback(song: SongResult, quality: AudioQualityPreference, options: PlaybackSourceOptions = {}): Promise<OmniAudioSource | null> {
     const original = getPlaybackSourceRef(song);
-    if (original.kind !== 'online' || !['qq', 'netease', 'kugou', 'bodian', 'qishui'].includes(original.providerId)) return null;
+    if (original.kind !== 'online' || !(FALLBACK_PROVIDER_IDS as readonly string[]).includes(original.providerId)) return null;
     const { omni } = await import('./omni');
     const metadata = createProviderSongMetadata(song);
     if (!metadata.durationMs || !metadata.artists.some(artist => normalizeRecordingText(artist.name))) return null;
     const providers = omni.getProviderSummaries().filter(summary => summary.providerId !== original.providerId
-        && ['qq', 'netease', 'kugou', 'bodian', 'qishui'].includes(summary.providerId) && summary.availability.configured
-        && omni.getProviderCapabilities(summary.providerId).search && omni.getProviderCapabilities(summary.providerId).playback
+        && (FALLBACK_PROVIDER_IDS as readonly string[]).includes(summary.providerId) && summary.availability.configured
+        && omni.getProviderCapabilities(summary.providerId).playback
+        && (RESOLVER_ONLY_PROVIDER_IDS.has(summary.providerId) || omni.getProviderCapabilities(summary.providerId).search)
         && !getProviderPlaybackCooldown(summary.providerId, 'play'));
     const deadline = Date.now() + 20000;
     let attempts = 0;
@@ -62,26 +71,44 @@ export async function resolvePlaybackFallback(song: SongResult, quality: AudioQu
     for (const { providerId } of providers.slice(0, 4)) {
         if (!check()) break;
         try {
-            const controller = new AbortController();
-            const page = await bounded(omni.searchProviderSongs(providerId, song.name + ' ' + metadata.artists[0].name,
-                { limit: 20, offset: 0 }, controller.signal), Math.min(5000, deadline - Date.now()), controller);
-            if (!check()) break;
-            const candidates = page.items.filter(candidate => candidate.sourceRef?.kind === "online" && candidate.sourceRef.providerId === providerId && matchesPlaybackRecording(song, candidate));
-            for (const candidate of candidates.slice(0, 2)) {
-                if (!check() || attempts >= 4) return null;
+            if (RESOLVER_ONLY_PROVIDER_IDS.has(providerId)) {
+                if (!check() || attempts >= 4) break;
                 attempts += 1;
-                try {
-                    // This provider-explicit primitive cannot re-enter the fallback chain.
-                    const source = await bounded(omni.getPrimaryAudioSource(candidate, quality), Math.min(6000, deadline - Date.now()));
-                    if (!check()) return null;
-                    const url = toPlayableAudioUrl(source?.url);
-                    if (source && url && !options.excludedUrls?.has(playbackUrlIdentity(url))) {
-                        return { ...source,
-                            // Never reuse gain/peak values belonging to the original platform's master.
-                            replayGain: { trackGain: 0, albumGain: 0, trackPeak: 1, albumPeak: 1, ...source.replayGain },
-                            backupSource: { providerId, mediaId: getPlaybackSourceRef(candidate).mediaId! } };
-                    }
-                } catch (error) { if ((error as Error)?.name === 'AbortError') throw error; }
+                const source = await bounded(omni.getProviderAudioSource(providerId, song, quality), Math.min(6000, deadline - Date.now()));
+                if (!check()) return null;
+                const url = toPlayableAudioUrl(source?.url);
+                if (source && url && !options.excludedUrls?.has(playbackUrlIdentity(url))) {
+                    return { ...source,
+                        replayGain: { trackGain: 0, albumGain: 0, trackPeak: 1, albumPeak: 1, ...source.replayGain },
+                        backupSource: { providerId, mediaId: original.mediaId } };
+                }
+            } else {
+                const controller = new AbortController();
+                const page = await bounded(omni.searchProviderSongs(providerId, song.name + ' ' + metadata.artists[0].name,
+                    { limit: 20, offset: 0 }, controller.signal), Math.min(5000, deadline - Date.now()), controller);
+                if (!check()) break;
+                const candidates = page.items.filter(candidate => {
+                    if (candidate.sourceRef?.kind !== 'online' || candidate.sourceRef.providerId !== providerId) return false;
+                    if (matchesPlaybackRecording(song, candidate)) return true;
+                    // 聚合源目录不提供时长时，仍按严格歌名 + 歌手集合匹配；时长由取流阶段验证。
+                    return createProviderSongMetadata(candidate).durationMs === 0 && matchesPlaybackIdentity(song, candidate);
+                });
+                for (const candidate of candidates.slice(0, 2)) {
+                    if (!check() || attempts >= 4) return null;
+                    attempts += 1;
+                    try {
+                        // This provider-explicit primitive cannot re-enter the fallback chain.
+                        const source = await bounded(omni.getPrimaryAudioSource(candidate, quality), Math.min(6000, deadline - Date.now()));
+                        if (!check()) return null;
+                        const url = toPlayableAudioUrl(source?.url);
+                        if (source && url && !options.excludedUrls?.has(playbackUrlIdentity(url))) {
+                            return { ...source,
+                                // Never reuse gain/peak values belonging to the original platform's master.
+                                replayGain: { trackGain: 0, albumGain: 0, trackPeak: 1, albumPeak: 1, ...source.replayGain },
+                                backupSource: { providerId, mediaId: getPlaybackSourceRef(candidate).mediaId! } };
+                        }
+                    } catch (error) { if ((error as Error)?.name === 'AbortError') throw error; }
+                }
             }
         } catch (error) { if ((error as Error)?.name === 'AbortError') throw error; }
     }

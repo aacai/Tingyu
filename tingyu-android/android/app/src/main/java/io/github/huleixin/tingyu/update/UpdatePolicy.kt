@@ -334,6 +334,8 @@ object UpdatePolicy {
         manifest: UpdateManifest?,
         nowMs: Long,
         lastVerifiedAtMs: Long = nowMs,
+        // 听屿不再拦截用户：即使云端策略标记强制更新，客户端也只给可取消的普通提醒。
+        allowForceUpdate: Boolean = false,
     ): UpdateDecision {
         if (manifest == null) return UpdateDecision(UpdateDecisionMode.NONE, "no_manifest")
         if (manifest.policyExpiresAtEpochMs <= nowMs) {
@@ -352,11 +354,14 @@ object UpdatePolicy {
 
         val belowMinSupported = currentVersionCode < manifest.minSupportedVersionCode
         if (belowMinSupported && manifest.updateEnabled) {
-            return if (withinOfflineGrace) {
+            if (!withinOfflineGrace) {
+                // 长期离线本地音乐用户超过离线宽限期后，降级为普通提醒，避免永久锁死离线播放能力。
+                return UpdateDecision(UpdateDecisionMode.OPTIONAL_UPDATE, "offline_grace_exceeded", manifest)
+            }
+            return if (allowForceUpdate) {
                 UpdateDecision(UpdateDecisionMode.FORCE_UPDATE, "below_min_supported_version_code", manifest)
             } else {
-                // 长期离线本地音乐用户超过离线宽限期后，降级为普通提醒，避免永久锁死离线播放能力。
-                UpdateDecision(UpdateDecisionMode.OPTIONAL_UPDATE, "offline_grace_exceeded", manifest)
+                UpdateDecision(UpdateDecisionMode.OPTIONAL_UPDATE, "force_update_disabled", manifest)
             }
         }
 

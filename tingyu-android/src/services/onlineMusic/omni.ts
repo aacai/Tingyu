@@ -758,6 +758,13 @@ export const omni = {
         return bind(resolved);
     },
 
+    /** 显式 provider 取流：供只解析播放地址、没有目录搜索能力的备用音源使用，不改写歌曲身份。 */
+    async getProviderAudioSource(providerId: OmniProviderId, song: SongResult, quality: AudioQualityPreference): Promise<OmniAudioSource | null> {
+        const provider = requireOnlineMusicProvider(providerId);
+        if (!provider.playback) throw new OnlineProviderError('unsupported', `Provider has no playback: ${providerId}`, providerId);
+        return provider.playback.getAudioSource(song, quality);
+    },
+
     // Asked once per track, including for local and Navidrome songs, so an unsupported source is a
     // plain `false` rather than the throw `providerForSong` would raise.
     canReportPlayback(song: SongResult): boolean {

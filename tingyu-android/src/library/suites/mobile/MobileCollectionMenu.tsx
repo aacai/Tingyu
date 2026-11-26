@@ -1,4 +1,5 @@
 import { cacheAudioPlaylist } from '../../../services/audioPlaylistCache';
+import { downloadSongToMusic } from '../../../services/musicDownload';
 import { isCapacitorAndroid } from '../../../platform/runtime';
 import { useSettingsModalStore } from '../../../stores/useSettingsModalStore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -238,6 +239,22 @@ export default function MobileCollectionMenu({
         const items: NativePanelActionRow[] = [];
         handlers.enqueue = () => { model.actions.enqueueTrack(target.song); onClose(); };
         items.push({ id: 'enqueue', label: t('mobileLibrary.enqueue'), icon: 'plus' });
+        if (isCapacitorAndroid() && target.song.sourceRef?.kind === 'online') {
+            handlers.downloadToMusic = () => {
+                if (busy) return;
+                setBusy(true);
+                setError('');
+                setStatusMessage({ type: 'info', text: t('status.downloadingMusic') });
+                void downloadSongToMusic(target.song).then(() => {
+                    setStatusMessage({ type: 'success', text: t('status.downloadedMusic') });
+                    onClose();
+                }).catch(error => {
+                    const detail = error instanceof Error ? error.message : String(error);
+                    setStatusMessage({ type: 'error', text: t('status.downloadMusicFailed', { error: detail }) });
+                }).finally(() => setBusy(false));
+            };
+            items.push({ id: 'downloadToMusic', label: t('mobileLibrary.downloadToMusic'), icon: 'download', disabled: busy });
+        }
         if (localSongId) {
             handlers.addToPlaylistSheet = () => { openAddToPlaylistForSong(target.song); onClose(); };
             items.push({ id: 'addToPlaylistSheet', label: t('localMusic.addToPlaylist'), icon: 'music2' });

@@ -8,6 +8,9 @@ import { kugouProvider } from './kugouProvider';
 import { qqProvider } from './qqProvider';
 import { bodianProvider } from './bodianProvider';
 import { qishuiProvider } from './qishui/qishuiProvider';
+import { gdmusicProvider } from './gdmusicProvider';
+import { customApiProvider } from './customApiProvider';
+import { pyncmdProvider } from './pyncmdProvider';
 
 // src/services/onlineMusic/providerRegistry.ts
 
@@ -85,5 +88,8 @@ registerOnlineMusicProvider(kugouProvider);
 registerOnlineMusicProvider(qqProvider);
 registerOnlineMusicProvider(bodianProvider);
 registerOnlineMusicProvider(qishuiProvider);
+registerOnlineMusicProvider(gdmusicProvider);
+registerOnlineMusicProvider(customApiProvider);
+registerOnlineMusicProvider(pyncmdProvider);
 
 installLxProviders(registerOnlineMusicProvider, unregisterOnlineMusicProvider, getOnlineMusicProvider);

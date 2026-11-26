@@ -5,3 +5,9 @@
 
 # 构建脚本暂存旧 dist 的目录
 /.trash-old/
+
+# 本地签名凭据：签名库与密码文件永不入库，CI 用同名 Actions Secrets
+*.jks
+*.keystore
+keystore.properties
+**/signing.properties

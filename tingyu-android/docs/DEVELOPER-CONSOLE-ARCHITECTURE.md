@@ -80,20 +80,6 @@ flowchart TB
 4. **独立发布确认密钥 (`RELEASE_PUBLISH_SECRET` + 一次性防重放 `confirmNonce`)**：
    - 执行 `publish`（正式发布）、`pause`（暂停更新）、`unlock`（紧急解除强制更新）时，除具备 `admin` 身份外，还必须额外验证独立 `X-Publish-Secret`、单次有效 `confirmNonce`（写入 `challenges` 表防重放）及候选版本 `approved_digest` + `expectedSha256`。
 
----
-
-## 4. 密钥保存、分离与恢复指南
-
-| 密钥 / 凭据名称 | 用途 | 存储位置 | 泄露应急与轮换恢复机制 |
-| :--- | :--- | :--- | :--- |
-| **Android APK 正式签名库** (`tingyu-release.p12`) | 签署 Android 安装包本身 | **仅存开发者电脑本地** (`private/signing/`)，永不上传任何云端 | Android 系统级信任根，请离线冷备份至加密 U 盘；切勿丢失。 |
-| **策略签名主私钥** (`policy_signing_k1`) | 签署更新策略 JSON (`keyId = tingyu-policy-2026-k1`) | 本机 Windows DPAPI (`policy_signing_k1.dpapi`) + Worker Secret (`UPDATE_SIGNING_PRIVATE_KEY_JWK`) | 客户端 `UpdateTrustAnchors.kt` 已同时预埋备用公钥 **`tingyu-policy-2026-k2-backup`**！一旦怀疑 `k1` 泄露，无需发版即可切换 `k2` 私钥签发更高 `policyRevision`。 |
-| **策略签名冷备私钥** (`policy_signing_k2_backup`) | 主策略私钥轮换/应急接管 | **仅存本机 Windows DPAPI** (`policy_signing_k2_backup.dpapi`)，默认不上云 | 需要轮换时将其配置为 Worker 新签名私钥，并在下一版客户端移除旧 `k1` 公钥。 |
-| **CNB 个人访问令牌** (`.cnb/token`) | 本机 `cnb` CLI 上传 Release 附件与同步静态仓库 | **仅存开发者电脑本地** (`~/.cnb/token`)，未迁移至云端 | 可随时在 CNB 个人设置吊销并重新执行 `cnb login`。 |
-| **后台四级业务密钥** (`read` / `admin` / `prepare` / `publish`) | 控制面分级鉴权 | 本机 Windows DPAPI (`C:\Users\DELL\AppData\Local\TingyuFeedback\*.dpapi`) + Worker Secret | 删除对应 `.dpapi` 文件后运行 `python tools/release_credentials.py --prepare` 重新生成高熵随机值，再执行 `deploy_feedback.py` 立即轮换生效。 |
-
----
-
 ## 5. Android 安装流程与本地用户数据保留机制说明
 
 客户端更新安装链路位于 `android/app/src/main/java/io/github/huleixin/tingyu/update/`：

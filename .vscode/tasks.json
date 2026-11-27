@@ -4,7 +4,7 @@
     {
       "label": "Build debug apk and install",
       "type": "shell",
-      "command": "export NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://127.0.0.1:10808 HTTPS_PROXY=http://127.0.0.1:10808 ALL_PROXY=http://127.0.0.1:10808; npm run cap:sync:android && JAVA_HOME=\"${workspaceFolder}/.tmp-jdk21/Contents/Home\" ANDROID_HOME=\"$HOME/Library/Android/sdk\" ANDROID_SDK_ROOT=\"$HOME/Library/Android/sdk\" sh ./android/gradlew -p ./android :app:assembleDebug && (adb install -r -d ./android/app/build/outputs/apk/debug/app-debug.apk || true)",
+      "command": "export NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://127.0.0.1:10808 HTTPS_PROXY=http://127.0.0.1:10808 ALL_PROXY=http://127.0.0.1:10808; npm run cap:sync:android && JAVA_HOME=\"${workspaceFolder}/.tmp-jdk21/Contents/Home\" ANDROID_HOME=\"$HOME/Library/Android/sdk\" ANDROID_SDK_ROOT=\"$HOME/Library/Android/sdk\" sh ./android/gradlew -p ./android :app:assembleDebug && DEVICES=$(adb devices | tr -d '\r' | grep -w device | cut -f1); if [ -z \"$DEVICES\" ]; then echo \"No adb devices\"; exit 1; fi; printf \"%s\\n\" \"$DEVICES\" | while read -r DEVICE; do echo \"Installing on $DEVICE\"; adb -s \"$DEVICE\" install -r -d ./android/app/build/outputs/apk/debug/app-debug.apk || echo \"Install failed on $DEVICE\"; done",
       "options": {
         "cwd": "${workspaceFolder}"
       },

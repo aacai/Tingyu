@@ -285,7 +285,8 @@
 @media (min-width: 840px) {
     .ty-search[data-wide='true'] {
         inset: 84px auto auto 50%;
-        transform: translateX(-50%);
+        /* Framer Motion 会写内联 transform；居中使用独立的 translate 属性，避免被它覆盖。 */
+        translate: -50% 0;
         width: min(760px, calc(100vw - 56px));
         height: min(620px, calc(100vh - 132px));
         max-height: calc(100vh - 132px);

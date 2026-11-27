@@ -158,6 +158,7 @@
     "appId": "io.github.huleixin.tingyu.desktop",
     "productName": "Tingyu",
     "asar": true,
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release-desktop"
     },

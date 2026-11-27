@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, protocol, shell } = require('electron');
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const { METHODS, toChannel } = require('./channels.cjs');
 
@@ -13,6 +14,69 @@ protocol.registerSchemesAsPrivileged([{
 
 const SETTINGS_FILE = () => path.join(app.getPath('userData'), 'settings.json');
 const DIST_DIR = path.join(__dirname, '..', 'dist');
+
+const NETEASE_STATUS_CHANNEL = 'netease-api-status-changed';
+let neteaseApp = null;
+let neteasePort = null;
+let neteaseStartPromise = null;
+let neteaseStatus = { status: 'starting', port: null, error: null, updatedAt: Date.now() };
+
+function publishNeteaseStatus(patch) {
+  neteaseStatus = { ...neteaseStatus, ...patch, updatedAt: Date.now() };
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(NETEASE_STATUS_CHANNEL, neteaseStatus);
+  }
+}
+
+/** 让网易 API 监听随机空闲回环端口，避免和 Vite / 用户本机服务抢固定端口。 */
+function reserveLocalPort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close(() => resolve(typeof address === 'object' && address ? address.port : 0));
+    });
+  });
+}
+
+/** renderer 的 netease.ts 只认 getNeteasePort；这里提供真实内嵌后端而不是空桩。 */
+async function startNeteaseApi() {
+  if (neteaseApp?.server?.listening) return true;
+  if (neteaseStartPromise) return neteaseStartPromise;
+  neteaseStartPromise = (async () => {
+    publishNeteaseStatus({ status: 'starting', port: null, error: null });
+    try {
+      const port = await reserveLocalPort();
+      if (!port) throw new Error('could not reserve a loopback port');
+      const { serveNcmApi } = require('@neteasecloudmusicapienhanced/api/server');
+      const appExt = await serveNcmApi({ host: '127.0.0.1', port, checkVersion: false });
+      await new Promise((resolve, reject) => {
+        if (appExt.server.listening) return resolve();
+        appExt.server.once('listening', resolve);
+        appExt.server.once('error', reject);
+      });
+      neteaseApp = appExt;
+      neteasePort = port;
+      publishNeteaseStatus({ status: 'running', port, error: null });
+      return true;
+    } catch (error) {
+      publishNeteaseStatus({ status: 'error', port: null, error: error instanceof Error ? error.message : String(error) });
+      return false;
+    } finally {
+      neteaseStartPromise = null;
+    }
+  })();
+  return neteaseStartPromise;
+}
+
+async function stopNeteaseApi() {
+  const running = neteaseApp;
+  neteaseApp = null;
+  neteasePort = null;
+  if (!running?.server?.listening) return;
+  await new Promise(resolve => running.server.close(() => resolve()));
+}
 
 function registerAppProtocol() {
   protocol.registerFileProtocol('tingyu', (request, callback) => {
@@ -62,7 +126,10 @@ function stubValue(name) {
 function registerIpc() {
   ipcMain.on('get-platform', event => { event.returnValue = process.platform; });
   ipcMain.on('get-is-linux-x11', event => { event.returnValue = false; });
-  const handled = new Set(['get-settings', 'save-settings', 'open-external-url', 'quit-app']);
+  const handled = new Set([
+    'get-settings', 'save-settings', 'open-external-url', 'quit-app',
+    'get-netease-port', 'get-netease-api-status', 'restart-netease-api',
+  ]);
   for (const name of METHODS) {
     const channel = toChannel(name);
     if (handled.has(channel)) continue;
@@ -85,6 +152,12 @@ function registerIpc() {
     } catch {
       return false;
     }
+  });
+  ipcMain.handle('get-netease-port', async () => neteasePort);
+  ipcMain.handle('get-netease-api-status', async () => neteaseStatus);
+  ipcMain.handle('restart-netease-api', async () => {
+    await stopNeteaseApi();
+    return startNeteaseApi();
   });
   ipcMain.handle('quit-app', async () => { app.quit(); return true; });
 }
@@ -115,6 +188,11 @@ function createWindow() {
 }
 
 registerIpc();
-app.whenReady().then(() => { registerAppProtocol(); createWindow(); });
+app.whenReady().then(() => {
+  registerAppProtocol();
+  void startNeteaseApi();
+  createWindow();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+app.on('before-quit', () => { void stopNeteaseApi(); });

@@ -11,7 +11,15 @@ const bridge = {
 };
 
 for (const name of METHODS) {
-  if (name.startsWith('on')) {
+  if (name === 'onNeteaseApiStatusChanged') {
+    bridge[name] = listener => {
+      if (typeof listener !== 'function') return () => {};
+      const channel = toChannel(name);
+      const handler = (_event, status) => listener(status);
+      ipcRenderer.on(channel, handler);
+      return () => ipcRenderer.removeListener(channel, handler);
+    };
+  } else if (name.startsWith('on')) {
     bridge[name] = () => () => {};
   } else {
     bridge[name] = (...args) => ipcRenderer.invoke(toChannel(name), ...args);

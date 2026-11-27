@@ -282,6 +282,22 @@
 .ty-hot-index { width: 16px; flex: none; color: var(--ty-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
 .ty-hot-word { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+@media (min-width: 840px) {
+    .ty-search[data-wide='true'] {
+        inset: 84px auto auto 50%;
+        transform: translateX(-50%);
+        width: min(760px, calc(100vw - 56px));
+        height: min(620px, calc(100vh - 132px));
+        max-height: calc(100vh - 132px);
+        border: 1px solid var(--ty-border);
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+        padding-top: 0;
+    }
+    .ty-search[data-wide='true'] .ty-search-head { border-radius: 18px 18px 0 0; }
+    .ty-search[data-wide='true'] .ty-hot { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ty-search[data-wide='true'] .ty-search-scroll { padding-bottom: 16px; }
+}
 @media (max-width: 340px) {
     .ty-search-head { padding-inline: 10px; }
     .ty-search-scroll { padding-inline: 10px; }

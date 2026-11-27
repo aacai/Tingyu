@@ -26,6 +26,7 @@ import { useLocalSearchSuggestions } from './useLocalSearchSuggestions';
 import { useSearchSettingsStore } from '../../../stores/useSearchSettingsStore';
 import { useSearchSuggestions } from './useSearchSuggestions';
 import { useVisualViewport } from './useVisualViewport';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { buildSearchCollectionDescriptor } from './searchCollectionOpen';
 import { useCollectionNavigationStore } from '../../../stores/useCollectionNavigationStore';
 import { useOnlineProviderAccountStore } from '../../../stores/useOnlineProviderAccountStore';
@@ -132,6 +133,7 @@ const SearchWorkspace: React.FC<SearchWorkspaceProps> = ({
     );
     const capabilities = useMemo(() => exploreCapabilities(effectiveSource), [effectiveSource, registryVersion]);
     const viewport = useVisualViewport();
+    const wideLayout = useMediaQuery('(min-width: 840px)');
     const sourceNeedsSetup = effectiveSource === 'navidrome' && !getNavidromeConfig();
 
     const [mode, setMode] = useState<'landing' | 'suggest' | 'results'>(
@@ -327,10 +329,11 @@ const SearchWorkspace: React.FC<SearchWorkspaceProps> = ({
                     className="ty-search"
                     data-light={isDaylight ? 'true' : undefined}
                     data-keyboard={viewport.keyboardOpen ? 'true' : undefined}
+                    data-wide={wideLayout ? 'true' : undefined}
                     style={{
                         '--ty-accent': isDaylight ? '#22775a' : '#9fe0c4',
                         '--ty-z': hasCollection ? 5 : 50,
-                        ...(viewport.height > 0 ? { height: viewport.height, top: viewport.offsetTop, bottom: 'auto' } : {}),
+                        ...(!wideLayout && viewport.height > 0 ? { height: viewport.height, top: viewport.offsetTop, bottom: 'auto' } : {}),
                     } as React.CSSProperties}
                 >
                     {!native&&<><header className="ty-search-head">

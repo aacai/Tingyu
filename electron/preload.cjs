@@ -8,11 +8,6 @@ const bridge = {
   platform: ipcRenderer.sendSync('get-platform'),
   isLinuxX11: ipcRenderer.sendSync('get-is-linux-x11'),
   webUtils: { getPathForFile: file => String(file?.path || '') },
-  mods: {
-    isAvailable: () => false,
-    list: async () => [],
-    invoke: async () => ({ ok: false, error: 'unsupported' }),
-  },
 };
 
 for (const name of METHODS) {

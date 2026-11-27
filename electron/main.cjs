@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { METHODS, toChannel } = require('./channels.cjs');
@@ -6,7 +6,21 @@ const { METHODS, toChannel } = require('./channels.cjs');
 // electron/main.cjs
 // 听屿桌面壳：加载 Vite 产物，提供最小 preload IPC；未知桌面能力返回安全空值，不阻塞 Web UI。
 
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'tingyu',
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+}]);
+
 const SETTINGS_FILE = () => path.join(app.getPath('userData'), 'settings.json');
+const DIST_DIR = path.join(__dirname, '..', 'dist');
+
+function registerAppProtocol() {
+  protocol.registerFileProtocol('tingyu', (request, callback) => {
+    const pathname = decodeURIComponent(new URL(request.url).pathname);
+    const target = path.join(DIST_DIR, pathname === '/' ? 'index.html' : pathname);
+    callback({ path: target.startsWith(DIST_DIR) ? target : path.join(DIST_DIR, 'index.html') });
+  });
+}
 
 function readSettings() {
   try {
@@ -89,18 +103,18 @@ function createWindow() {
       sandbox: false,
     },
   });
-  window.setWindowOpenHandler(({ url }) => {
+  window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
   if (process.env.TINGYU_DESKTOP_DEV === 'true') {
     void window.loadURL('http://127.0.0.1:3000');
   } else {
-    window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    void window.loadURL('tingyu://app/index.html');
   }
 }
 
 registerIpc();
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { registerAppProtocol(); createWindow(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

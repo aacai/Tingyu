@@ -1,5 +1,9 @@
 import huanyinCode from './presets/huanyin.js?raw';
 import hywCode from './presets/hyw.js?raw';
+import ikunCode from './presets/ikun.js?raw';
+import qdyCode from './presets/qdy.js?raw';
+import qingliangCode from './presets/qingliang.js?raw';
+import jiexiangCode from './presets/jiexiang.js?raw';
 import { parseLxScript, type LxScript } from './contract';
 
 // src/services/lxSource/presets.ts
@@ -24,6 +28,30 @@ export const LX_PRESETS: readonly LxPreset[] = [
         name: 'HYW 音源',
         importUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/hyw/latest.js',
         code: hywCode,
+    },
+    {
+        id: 'builtin-ikun',
+        name: 'ikun音源',
+        importUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/ikun/latest.js',
+        code: ikunCode,
+    },
+    {
+        id: 'builtin-qdy',
+        name: '全豆要聚合音源',
+        importUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/qdy/latest.js',
+        code: qdyCode,
+    },
+    {
+        id: 'builtin-qingliang',
+        name: '轻量音源',
+        importUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/qingliang/latest.js',
+        code: qingliangCode,
+    },
+    {
+        id: 'builtin-jiexiang',
+        name: '杰翔聚合音源',
+        importUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/jiexiang/latest.js',
+        code: jiexiangCode,
     },
 ];
 

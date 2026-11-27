@@ -28,7 +28,7 @@ const initialize = (code: string): InitPayload => {
 };
 
 it('bundled presets expose stable metadata and raw HTTPS import URLs', () => {
-    expect(LX_PRESETS.length).toBeGreaterThanOrEqual(2);
+    expect(LX_PRESETS.length).toBeGreaterThanOrEqual(6);
     for (const preset of LX_PRESETS) {
         const script = presetScript(preset);
         expect(script.id).toBe(preset.id);

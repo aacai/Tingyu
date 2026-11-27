@@ -6,6 +6,7 @@ import ThemedDialog from '../../shared/ThemedDialog';
 import { useLxSourceStore } from '../../../stores/useLxSourceStore';
 import { useSettingsModalStore } from '../../../stores/useSettingsModalStore';
 import { readFallbackConfig, writeFallbackConfig } from '../../../services/onlineMusic/fallbackConfig';
+import { installBuiltinLxPresets } from '../../../services/lxSource/presetInstall';
 
 // src/components/modal/settings/SourceExtensionSettings.tsx
 export default function SourceExtensionSettings() {
@@ -38,6 +39,7 @@ export default function SourceExtensionSettings() {
                             </div>
                         </div>)}
                     </div>}
+                    <button type="button" disabled={!state.extensionEnabled} onClick={()=>act(async()=>{if(!await installBuiltinLxPresets())setError('请先确认实验性功能风险');})}>一键添加内置音源（递归换源）</button>
                     <div className="ty-lx-fallback-config">
                         <h3>播放失败备用音源</h3>
                         <label>pyncmd 服务地址
